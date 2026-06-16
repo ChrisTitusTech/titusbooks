@@ -2,7 +2,7 @@
 
 TitusBooks is a multi-platform bookkeeping desktop app on an Avalonia + .NET 10 + PostgreSQL foundation.
 
-The current implementation is in Phase 0 of the roadmap: repository bootstrap only. It includes the solution structure, placeholder desktop shell, configuration model, logging setup, and smoke tests. It does not open a PostgreSQL connection yet.
+The current implementation is in Phase 1 of the roadmap: database and domain foundation. It includes the solution structure, placeholder desktop shell, configuration model, logging setup, PostgreSQL migrations, core accounting models, default chart of accounts seeding, and balanced journal-entry enforcement.
 
 ## Files
 
@@ -12,7 +12,8 @@ The current implementation is in Phase 0 of the roadmap: repository bootstrap on
 - `SKILLS.md` - Domain and technical skills Codex should apply while working on the project.
 - `src/FinancialApp.Desktop` - Avalonia desktop application.
 - `src/FinancialApp.Core` - Domain and application models.
-- `src/FinancialApp.Data` - Future PostgreSQL data access and migrations.
+- `src/FinancialApp.Data` - PostgreSQL data access and embedded migrations.
+- `src/FinancialApp.Migrations` - CLI for applying PostgreSQL migrations.
 - `src/FinancialApp.Importers` - Future CSV and provider importers.
 - `src/FinancialApp.Reports` - Future reporting logic.
 - `tests` - xUnit test projects.
@@ -42,6 +43,38 @@ dotnet run --project src/FinancialApp.Desktop/FinancialApp.Desktop.csproj
 ```
 
 Local, non-secret overrides may be placed in `src/FinancialApp.Desktop/appsettings.Local.json`. Do not commit database passwords or tokens.
+
+## Database Migrations
+
+The migration CLI accepts a PostgreSQL connection string from an argument or environment variable. Keep secrets out of committed config files.
+
+Preferred local setup:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` and fill in `TITUSBOOKS_CONNECTIONSTRING`. The `.env` file is ignored by git.
+
+```bash
+dotnet run --project src/FinancialApp.Migrations/FinancialApp.Migrations.csproj -- \
+  --connection-string "Host=localhost;Port=5432;Database=titusbooks;Username=postgres;Password=..."
+```
+
+Or:
+
+```bash
+TITUSBOOKS_CONNECTIONSTRING="Host=localhost;Port=5432;Database=titusbooks;Username=postgres;Password=..." \
+dotnet run --project src/FinancialApp.Migrations/FinancialApp.Migrations.csproj
+```
+
+Or, after filling in `.env`:
+
+```bash
+dotnet run --project src/FinancialApp.Migrations/FinancialApp.Migrations.csproj
+```
+
+The baseline migration creates organizations, accounts, import batches, imported transactions, journal entries, journal lines, categorization rules, and reconciliations.
 
 ## Recommended First Prompt for Codex
 

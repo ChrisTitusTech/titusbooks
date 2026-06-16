@@ -10,3 +10,5 @@ coverage/
 artifacts/
 publish/
 appsettings.Local.json
+.env
+.env.local

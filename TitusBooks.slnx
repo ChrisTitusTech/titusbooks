@@ -4,6 +4,7 @@
     <Project Path="src/FinancialApp.Data/FinancialApp.Data.csproj" />
     <Project Path="src/FinancialApp.Desktop/FinancialApp.Desktop.csproj" />
     <Project Path="src/FinancialApp.Importers/FinancialApp.Importers.csproj" />
+    <Project Path="src/FinancialApp.Migrations/FinancialApp.Migrations.csproj" />
     <Project Path="src/FinancialApp.Reports/FinancialApp.Reports.csproj" />
   </Folder>
   <Folder Name="/tests/">
