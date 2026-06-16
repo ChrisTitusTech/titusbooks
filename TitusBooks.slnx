@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FinancialApp.Core/FinancialApp.Core.csproj" />
+    <Project Path="src/FinancialApp.Data/FinancialApp.Data.csproj" />
+    <Project Path="src/FinancialApp.Desktop/FinancialApp.Desktop.csproj" />
+    <Project Path="src/FinancialApp.Importers/FinancialApp.Importers.csproj" />
+    <Project Path="src/FinancialApp.Reports/FinancialApp.Reports.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FinancialApp.Core.Tests/FinancialApp.Core.Tests.csproj" />
+    <Project Path="tests/FinancialApp.Importers.Tests/FinancialApp.Importers.Tests.csproj" />
+    <Project Path="tests/FinancialApp.Reports.Tests/FinancialApp.Reports.Tests.csproj" />
+  </Folder>
+</Solution>

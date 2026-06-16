@@ -1,6 +1,8 @@
-# Financial Desktop App Codex Plan
+# TitusBooks
 
-This folder contains a Codex-ready planning pack for building a multi-platform bookkeeping desktop app on an Avalonia + .NET + PostgreSQL foundation.
+TitusBooks is a multi-platform bookkeeping desktop app on an Avalonia + .NET 10 + PostgreSQL foundation.
+
+The current implementation is in Phase 0 of the roadmap: repository bootstrap only. It includes the solution structure, placeholder desktop shell, configuration model, logging setup, and smoke tests. It does not open a PostgreSQL connection yet.
 
 ## Files
 
@@ -8,6 +10,38 @@ This folder contains a Codex-ready planning pack for building a multi-platform b
 - `ROADMAP.md` - Phased implementation roadmap with milestones and acceptance criteria.
 - `AGENTS.md` - Codex agent operating instructions and task decomposition rules.
 - `SKILLS.md` - Domain and technical skills Codex should apply while working on the project.
+- `src/FinancialApp.Desktop` - Avalonia desktop application.
+- `src/FinancialApp.Core` - Domain and application models.
+- `src/FinancialApp.Data` - Future PostgreSQL data access and migrations.
+- `src/FinancialApp.Importers` - Future CSV and provider importers.
+- `src/FinancialApp.Reports` - Future reporting logic.
+- `tests` - xUnit test projects.
+
+## Local Development
+
+Prerequisite:
+
+- .NET SDK 10
+
+Build:
+
+```bash
+dotnet build TitusBooks.slnx
+```
+
+Run tests:
+
+```bash
+dotnet test TitusBooks.slnx
+```
+
+Run the placeholder desktop app:
+
+```bash
+dotnet run --project src/FinancialApp.Desktop/FinancialApp.Desktop.csproj
+```
+
+Local, non-secret overrides may be placed in `src/FinancialApp.Desktop/appsettings.Local.json`. Do not commit database passwords or tokens.
 
 ## Recommended First Prompt for Codex
 
@@ -18,7 +52,7 @@ Read AGENTS.md, SPEC.md, ROADMAP.md, and SKILLS.md. Then inspect the repository 
 ## Foundation Stack (Locked)
 
 - Desktop UI: Avalonia UI
-- Language/runtime: .NET 8 or newer
+- Language/runtime: .NET 10
 - Database: PostgreSQL
 - Data access: Npgsql + Dapper
 - Migrations: FluentMigrator or DbUp

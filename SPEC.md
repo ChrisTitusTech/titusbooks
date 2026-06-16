@@ -65,7 +65,7 @@ Packaging may be deferred until after the MVP, but the app architecture should a
 
 - UI: Avalonia UI
 - Language: C#
-- Runtime: .NET 8 or newer
+- Runtime: .NET 10
 - Database: PostgreSQL
 - PostgreSQL driver: Npgsql
 - Data access: Dapper for explicit SQL

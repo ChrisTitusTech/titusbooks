@@ -12,7 +12,7 @@ Create a clean, testable project foundation without implementing business featur
 
 ### Tasks
 
-- Confirm locked foundation stack: Avalonia UI + C#/.NET 8+ + PostgreSQL.
+- Confirm locked foundation stack: Avalonia UI + C#/.NET 10 + PostgreSQL.
 - Create solution/project structure.
 - Add formatting/linting configuration.
 - Add test project.
