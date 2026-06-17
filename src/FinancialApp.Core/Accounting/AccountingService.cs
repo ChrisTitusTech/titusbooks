@@ -12,9 +12,12 @@ public sealed class AccountingService
     private readonly IJournalEntryRepository journalEntryRepository;
     private readonly IAccountRepository? accountRepository;
 
-    public AccountingService(
-        IJournalEntryRepository journalEntryRepository,
-        IAccountRepository? accountRepository = null)
+    public AccountingService(IJournalEntryRepository journalEntryRepository)
+    {
+        this.journalEntryRepository = journalEntryRepository;
+    }
+
+    public AccountingService(IJournalEntryRepository journalEntryRepository, IAccountRepository accountRepository)
     {
         this.journalEntryRepository = journalEntryRepository;
         this.accountRepository = accountRepository;
@@ -57,27 +60,13 @@ public sealed class AccountingService
             [AccountType.Asset, AccountType.Liability],
             "Payment account must be an Asset or Liability account.");
 
-        return await PostJournalEntryAsync(new JournalEntryDraft
-        {
-            OrganizationId = expense.OrganizationId,
-            EntryDate = expense.EntryDate,
-            Memo = expense.Memo,
-            Lines =
-            [
-                new JournalLineDraft
-                {
-                    AccountId = expense.ExpenseAccountId,
-                    Debit = expense.Amount,
-                    Memo = expense.Memo
-                },
-                new JournalLineDraft
-                {
-                    AccountId = expense.PaymentAccountId,
-                    Credit = expense.Amount,
-                    Memo = expense.Memo
-                }
-            ]
-        }, cancellationToken);
+        return await PostTwoLineEntryAsync(
+            expense.OrganizationId,
+            expense.EntryDate,
+            expense.Memo,
+            DebitLine(expense.ExpenseAccountId, expense.Amount, expense.Memo),
+            CreditLine(expense.PaymentAccountId, expense.Amount, expense.Memo),
+            cancellationToken);
     }
 
     public async Task<JournalEntry> PostIncomeAsync(
@@ -101,27 +90,13 @@ public sealed class AccountingService
         EnsureAccountType(depositAccount, AccountType.Asset, "Deposit account must be an Asset account.");
         EnsureAccountType(incomeAccount, AccountType.Income, "Income account must be an Income account.");
 
-        return await PostJournalEntryAsync(new JournalEntryDraft
-        {
-            OrganizationId = income.OrganizationId,
-            EntryDate = income.EntryDate,
-            Memo = income.Memo,
-            Lines =
-            [
-                new JournalLineDraft
-                {
-                    AccountId = income.DepositAccountId,
-                    Debit = income.Amount,
-                    Memo = income.Memo
-                },
-                new JournalLineDraft
-                {
-                    AccountId = income.IncomeAccountId,
-                    Credit = income.Amount,
-                    Memo = income.Memo
-                }
-            ]
-        }, cancellationToken);
+        return await PostTwoLineEntryAsync(
+            income.OrganizationId,
+            income.EntryDate,
+            income.Memo,
+            DebitLine(income.DepositAccountId, income.Amount, income.Memo),
+            CreditLine(income.IncomeAccountId, income.Amount, income.Memo),
+            cancellationToken);
     }
 
     public async Task<JournalEntry> PostTransferAsync(
@@ -156,27 +131,50 @@ public sealed class AccountingService
             BalanceSheetAccountTypes,
             "Transfer destination account must be an Asset, Liability, or Equity account.");
 
+        return await PostTwoLineEntryAsync(
+            transfer.OrganizationId,
+            transfer.EntryDate,
+            transfer.Memo,
+            DebitLine(transfer.ToAccountId, transfer.Amount, transfer.Memo),
+            CreditLine(transfer.FromAccountId, transfer.Amount, transfer.Memo),
+            cancellationToken);
+    }
+
+    private async Task<JournalEntry> PostTwoLineEntryAsync(
+        Guid organizationId,
+        DateOnly entryDate,
+        string? memo,
+        JournalLineDraft debitLine,
+        JournalLineDraft creditLine,
+        CancellationToken cancellationToken)
+    {
         return await PostJournalEntryAsync(new JournalEntryDraft
         {
-            OrganizationId = transfer.OrganizationId,
-            EntryDate = transfer.EntryDate,
-            Memo = transfer.Memo,
-            Lines =
-            [
-                new JournalLineDraft
-                {
-                    AccountId = transfer.ToAccountId,
-                    Debit = transfer.Amount,
-                    Memo = transfer.Memo
-                },
-                new JournalLineDraft
-                {
-                    AccountId = transfer.FromAccountId,
-                    Credit = transfer.Amount,
-                    Memo = transfer.Memo
-                }
-            ]
+            OrganizationId = organizationId,
+            EntryDate = entryDate,
+            Memo = NormalizeMemo(memo),
+            Lines = [debitLine, creditLine]
         }, cancellationToken);
+    }
+
+    private static JournalLineDraft DebitLine(Guid accountId, decimal amount, string? memo)
+    {
+        return new JournalLineDraft
+        {
+            AccountId = accountId,
+            Debit = amount,
+            Memo = NormalizeMemo(memo)
+        };
+    }
+
+    private static JournalLineDraft CreditLine(Guid accountId, decimal amount, string? memo)
+    {
+        return new JournalLineDraft
+        {
+            AccountId = accountId,
+            Credit = amount,
+            Memo = NormalizeMemo(memo)
+        };
     }
 
     private async Task<Account> GetRequiredAccountAsync(
@@ -199,6 +197,11 @@ public sealed class AccountingService
         {
             throw new AccountingException("Amount must be greater than zero.");
         }
+    }
+
+    private static string? NormalizeMemo(string? memo)
+    {
+        return string.IsNullOrWhiteSpace(memo) ? null : memo.Trim();
     }
 
     private static void EnsureActive(Account account)

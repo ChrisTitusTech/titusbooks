@@ -157,9 +157,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             SelectedOrganization ??= Organizations.FirstOrDefault();
             if (SelectedOrganization is null)
             {
-                Accounts.Clear();
-                RegisterEntries.Clear();
-                RefreshTransactionAccountOptions();
+                ClearAccountState();
             }
 
             WorkspaceMessage = Organizations.Count == 0
@@ -208,11 +206,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var organization = SelectedOrganization;
         if (organization is null)
         {
-            Accounts.Clear();
-            SelectedAccount = null;
-            SelectedRegisterAccount = null;
-            RegisterEntries.Clear();
-            RefreshTransactionAccountOptions();
+            ClearAccountState();
             return;
         }
 
@@ -237,12 +231,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            Accounts.Clear();
-            foreach (var account in accounts)
-            {
-                Accounts.Add(account);
-            }
-
+            ReplaceAccounts(accounts);
             SelectedAccount = Accounts.FirstOrDefault();
             SelectedRegisterAccount ??= Accounts.FirstOrDefault();
             RefreshTransactionAccountOptions();
@@ -464,8 +453,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         if (value is null)
         {
-            Accounts.Clear();
-            SelectedAccount = null;
+            ClearAccountState();
             return;
         }
 
@@ -495,10 +483,31 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (existingIndex is null)
         {
             Accounts.Add(account);
+            RefreshTransactionAccountOptions();
             return;
         }
 
         Accounts[existingIndex.Value] = account;
+        RefreshTransactionAccountOptions();
+    }
+
+    private void ReplaceAccounts(IEnumerable<AccountSummary> accounts)
+    {
+        Accounts.Clear();
+        foreach (var account in accounts)
+        {
+            Accounts.Add(account);
+        }
+    }
+
+    private void ClearAccountState()
+    {
+        Accounts.Clear();
+        RegisterEntries.Clear();
+        SelectedAccount = null;
+        SelectedFromAccount = null;
+        SelectedToAccount = null;
+        SelectedRegisterAccount = null;
         RefreshTransactionAccountOptions();
     }
 
