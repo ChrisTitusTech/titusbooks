@@ -33,6 +33,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private AccountSummary? selectedAccount;
 
     private readonly TitusBooksApiClient? apiClient;
+    private int accountLoadVersion;
 
     public MainWindowViewModel()
         : this(new AppSettings())
@@ -98,6 +99,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             }
 
             SelectedOrganization ??= Organizations.FirstOrDefault();
+            if (SelectedOrganization is null)
+            {
+                Accounts.Clear();
+            }
+
             WorkspaceMessage = Organizations.Count == 0
                 ? "Create an organization to start bookkeeping."
                 : "Organizations loaded.";
@@ -141,17 +147,36 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     public async Task LoadAccountsAsync()
     {
-        if (apiClient is null || SelectedOrganization is null)
+        var organization = SelectedOrganization;
+        if (organization is null)
         {
             Accounts.Clear();
+            SelectedAccount = null;
             return;
         }
 
+        await LoadAccountsForOrganizationAsync(organization);
+    }
+
+    private async Task LoadAccountsForOrganizationAsync(OrganizationSummary organization)
+    {
+        if (apiClient is null)
+        {
+            WorkspaceMessage = "API client is not configured.";
+            return;
+        }
+
+        var loadVersion = Interlocked.Increment(ref accountLoadVersion);
+
         try
         {
-            Accounts.Clear();
-            var accounts = await apiClient.ListAccountsAsync(SelectedOrganization.Id);
+            var accounts = await apiClient.ListAccountsAsync(organization.Id);
+            if (loadVersion != accountLoadVersion)
+            {
+                return;
+            }
 
+            Accounts.Clear();
             foreach (var account in accounts)
             {
                 Accounts.Add(account);
@@ -244,8 +269,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             var updatedAccount = await apiClient.UpdateAccountAsync(
                 SelectedOrganization.Id,
                 SelectedAccount.Id,
-                NewAccountName.Trim(),
-                string.IsNullOrWhiteSpace(AccountSubtype) ? SelectedAccount.AccountSubtype : AccountSubtype.Trim());
+                new UpdateAccountCommand(
+                    NewAccountName.Trim(),
+                    string.IsNullOrWhiteSpace(AccountSubtype) ? SelectedAccount.AccountSubtype : AccountSubtype.Trim()));
 
             ReplaceAccount(updatedAccount);
             SelectedAccount = updatedAccount;
@@ -283,7 +309,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     partial void OnSelectedOrganizationChanged(OrganizationSummary? value)
     {
-        _ = LoadAccountsAsync();
+        if (value is null)
+        {
+            Accounts.Clear();
+            SelectedAccount = null;
+            return;
+        }
+
+        _ = LoadAccountsForOrganizationAsync(value);
     }
 
     private void ReplaceAccount(AccountSummary account)

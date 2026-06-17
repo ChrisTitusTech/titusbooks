@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace FinancialApp.Core.Api;
 
@@ -25,8 +26,10 @@ public sealed class TitusBooksApiClient
         using var response = await httpClient.PostAsJsonAsync("/organizations", command, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
 
-        return await response.Content.ReadFromJsonAsync<OrganizationSummary>(cancellationToken)
-            ?? throw new InvalidOperationException("API returned an empty organization response.");
+        return await ReadRequiredJsonAsync<OrganizationSummary>(
+            response,
+            "API returned an empty organization response.",
+            cancellationToken);
     }
 
     public async Task<IReadOnlyList<AccountSummary>> ListAccountsAsync(
@@ -49,25 +52,28 @@ public sealed class TitusBooksApiClient
             cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
 
-        return await response.Content.ReadFromJsonAsync<AccountSummary>(cancellationToken)
-            ?? throw new InvalidOperationException("API returned an empty account response.");
+        return await ReadRequiredJsonAsync<AccountSummary>(
+            response,
+            "API returned an empty account response.",
+            cancellationToken);
     }
 
     public async Task<AccountSummary> UpdateAccountAsync(
         Guid organizationId,
         Guid accountId,
-        string name,
-        string? accountSubtype,
+        UpdateAccountCommand command,
         CancellationToken cancellationToken = default)
     {
         using var response = await httpClient.PutAsJsonAsync(
             $"/organizations/{organizationId}/accounts/{accountId}",
-            new { Name = name, AccountSubtype = accountSubtype },
+            command,
             cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
 
-        return await response.Content.ReadFromJsonAsync<AccountSummary>(cancellationToken)
-            ?? throw new InvalidOperationException("API returned an empty account response.");
+        return await ReadRequiredJsonAsync<AccountSummary>(
+            response,
+            "API returned an empty account response.",
+            cancellationToken);
     }
 
     public async Task<AccountSummary> DeactivateAccountAsync(
@@ -81,8 +87,10 @@ public sealed class TitusBooksApiClient
             cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
 
-        return await response.Content.ReadFromJsonAsync<AccountSummary>(cancellationToken)
-            ?? throw new InvalidOperationException("API returned an empty account response.");
+        return await ReadRequiredJsonAsync<AccountSummary>(
+            response,
+            "API returned an empty account response.",
+            cancellationToken);
     }
 
     public async Task<SeedAccountsResult> SeedDefaultAccountsAsync(
@@ -95,8 +103,10 @@ public sealed class TitusBooksApiClient
             cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
 
-        return await response.Content.ReadFromJsonAsync<SeedAccountsResult>(cancellationToken)
-            ?? throw new InvalidOperationException("API returned an empty seed response.");
+        return await ReadRequiredJsonAsync<SeedAccountsResult>(
+            response,
+            "API returned an empty seed response.",
+            cancellationToken);
     }
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
@@ -106,12 +116,48 @@ public sealed class TitusBooksApiClient
             return;
         }
 
-        var message = response.StatusCode == HttpStatusCode.Conflict
-            ? "That record already exists."
-            : await response.Content.ReadAsStringAsync(cancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        var message = TryReadErrorMessage(responseBody);
+
+        if (string.IsNullOrWhiteSpace(message) && response.StatusCode == HttpStatusCode.Conflict)
+        {
+            message = "That record already exists.";
+        }
 
         throw new InvalidOperationException(string.IsNullOrWhiteSpace(message)
             ? $"API returned HTTP {(int)response.StatusCode}."
             : message);
     }
+
+    private static async Task<T> ReadRequiredJsonAsync<T>(
+        HttpResponseMessage response,
+        string emptyResponseMessage,
+        CancellationToken cancellationToken)
+    {
+        return await response.Content.ReadFromJsonAsync<T>(cancellationToken)
+            ?? throw new InvalidOperationException(emptyResponseMessage);
+    }
+
+    private static string? TryReadErrorMessage(string responseBody)
+    {
+        if (string.IsNullOrWhiteSpace(responseBody))
+        {
+            return null;
+        }
+
+        try
+        {
+            var error = JsonSerializer.Deserialize<ApiErrorResponse>(
+                responseBody,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            return string.IsNullOrWhiteSpace(error?.Error) ? responseBody : error.Error;
+        }
+        catch (JsonException)
+        {
+            return responseBody;
+        }
+    }
+
+    private sealed record ApiErrorResponse(string? Error);
 }

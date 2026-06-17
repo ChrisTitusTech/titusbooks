@@ -48,7 +48,7 @@ public sealed class OrganizationEndpointTests
         var repositories = new InMemoryRepositories();
         await using var factory = CreateFactory(repositories);
         using var client = factory.CreateClient();
-        var organizationId = Guid.NewGuid();
+        var organizationId = await CreateOrganizationAsync(client);
 
         var firstResponse = await client.PostAsync($"/organizations/{organizationId}/accounts/defaults", null);
         var firstBody = await firstResponse.Content.ReadFromJsonAsync<SeedAccountsResponse>();
@@ -69,7 +69,7 @@ public sealed class OrganizationEndpointTests
         var repositories = new InMemoryRepositories();
         await using var factory = CreateFactory(repositories);
         using var client = factory.CreateClient();
-        var organizationId = Guid.NewGuid();
+        var organizationId = await CreateOrganizationAsync(client);
         await client.PostAsync($"/organizations/{organizationId}/accounts/defaults", null);
 
         var response = await client.GetAsync($"/organizations/{organizationId}/accounts");
@@ -87,7 +87,7 @@ public sealed class OrganizationEndpointTests
         var repositories = new InMemoryRepositories();
         await using var factory = CreateFactory(repositories);
         using var client = factory.CreateClient();
-        var organizationId = Guid.NewGuid();
+        var organizationId = await CreateOrganizationAsync(client);
 
         var response = await client.PostAsJsonAsync(
             $"/organizations/{organizationId}/accounts",
@@ -101,12 +101,26 @@ public sealed class OrganizationEndpointTests
     }
 
     [Fact]
+    public async Task CreateAccount_ReturnsNotFoundForMissingOrganization()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            $"/organizations/{Guid.NewGuid()}/accounts",
+            new CreateAccountRequest("Bank Savings", "Asset", "Savings"));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task UpdateAccount_RenamesAccount()
     {
         var repositories = new InMemoryRepositories();
         await using var factory = CreateFactory(repositories);
         using var client = factory.CreateClient();
-        var organizationId = Guid.NewGuid();
+        var organizationId = await CreateOrganizationAsync(client);
         var createResponse = await client.PostAsJsonAsync(
             $"/organizations/{organizationId}/accounts",
             new CreateAccountRequest("Old Name", "Expense"));
@@ -124,12 +138,34 @@ public sealed class OrganizationEndpointTests
     }
 
     [Fact]
+    public async Task UpdateAccount_RejectsDuplicateName()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = await CreateOrganizationAsync(client);
+        await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/accounts",
+            new CreateAccountRequest("Meals", "Expense"));
+        var createResponse = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/accounts",
+            new CreateAccountRequest("Travel", "Expense"));
+        var createdAccount = await createResponse.Content.ReadFromJsonAsync<AccountResponse>();
+
+        var updateResponse = await client.PutAsJsonAsync(
+            $"/organizations/{organizationId}/accounts/{createdAccount!.Id}",
+            new UpdateAccountRequest("Meals"));
+
+        Assert.Equal(HttpStatusCode.Conflict, updateResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task DeactivateAccount_MarksAccountInactive()
     {
         var repositories = new InMemoryRepositories();
         await using var factory = CreateFactory(repositories);
         using var client = factory.CreateClient();
-        var organizationId = Guid.NewGuid();
+        var organizationId = await CreateOrganizationAsync(client);
         var createResponse = await client.PostAsJsonAsync(
             $"/organizations/{organizationId}/accounts",
             new CreateAccountRequest("Temporary", "Expense"));
@@ -143,6 +179,15 @@ public sealed class OrganizationEndpointTests
         Assert.Equal(HttpStatusCode.OK, deactivateResponse.StatusCode);
         Assert.NotNull(deactivatedAccount);
         Assert.False(deactivatedAccount.IsActive);
+    }
+
+    private static async Task<Guid> CreateOrganizationAsync(HttpClient client)
+    {
+        var response = await client.PostAsJsonAsync(
+            "/organizations",
+            new CreateOrganizationRequest($"Test Organization {Guid.NewGuid():N}", "USD", 1));
+        var organization = await response.Content.ReadFromJsonAsync<OrganizationResponse>();
+        return organization!.Id;
     }
 
     private static WebApplicationFactory<Program> CreateFactory(InMemoryRepositories repositories)

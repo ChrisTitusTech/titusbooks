@@ -85,9 +85,15 @@ app.MapPost("/organizations", async (
 
 app.MapGet("/organizations/{organizationId:guid}/accounts", async (
     Guid organizationId,
+    [FromServices] IOrganizationRepository organizationRepository,
     [FromServices] IAccountRepository accountRepository,
     CancellationToken cancellationToken) =>
 {
+    if (!await OrganizationExistsAsync(organizationRepository, organizationId, cancellationToken))
+    {
+        return Results.NotFound();
+    }
+
     var accounts = await accountRepository.ListByOrganizationAsync(organizationId, cancellationToken);
     return Results.Ok(accounts.Select(AccountResponse.FromAccount));
 });
@@ -95,9 +101,15 @@ app.MapGet("/organizations/{organizationId:guid}/accounts", async (
 app.MapPost("/organizations/{organizationId:guid}/accounts", async (
     Guid organizationId,
     CreateAccountRequest request,
+    [FromServices] IOrganizationRepository organizationRepository,
     [FromServices] IAccountRepository accountRepository,
     CancellationToken cancellationToken) =>
 {
+    if (!await OrganizationExistsAsync(organizationRepository, organizationId, cancellationToken))
+    {
+        return Results.NotFound();
+    }
+
     if (string.IsNullOrWhiteSpace(request.Name))
     {
         return Results.BadRequest(new { error = "Account name is required." });
@@ -134,23 +146,36 @@ app.MapPut("/organizations/{organizationId:guid}/accounts/{accountId:guid}", asy
     Guid organizationId,
     Guid accountId,
     UpdateAccountRequest request,
+    [FromServices] IOrganizationRepository organizationRepository,
     [FromServices] IAccountRepository accountRepository,
     CancellationToken cancellationToken) =>
 {
+    if (!await OrganizationExistsAsync(organizationRepository, organizationId, cancellationToken))
+    {
+        return Results.NotFound();
+    }
+
     if (string.IsNullOrWhiteSpace(request.Name))
     {
         return Results.BadRequest(new { error = "Account name is required." });
     }
 
+    var accountName = request.Name.Trim();
     var account = await accountRepository.GetByIdAsync(organizationId, accountId, cancellationToken);
     if (account is null)
     {
         return Results.NotFound();
     }
 
+    var existingAccount = await accountRepository.FindByNameAsync(organizationId, accountName, cancellationToken);
+    if (existingAccount is not null && existingAccount.Id != accountId)
+    {
+        return Results.Conflict(new { error = "An account with that name already exists." });
+    }
+
     var updatedAccount = account with
     {
-        Name = request.Name.Trim(),
+        Name = accountName,
         AccountSubtype = string.IsNullOrWhiteSpace(request.AccountSubtype) ? null : request.AccountSubtype.Trim(),
         UpdatedAt = DateTimeOffset.UtcNow
     };
@@ -163,9 +188,15 @@ app.MapPut("/organizations/{organizationId:guid}/accounts/{accountId:guid}", asy
 app.MapPost("/organizations/{organizationId:guid}/accounts/{accountId:guid}/deactivate", async (
     Guid organizationId,
     Guid accountId,
+    [FromServices] IOrganizationRepository organizationRepository,
     [FromServices] IAccountRepository accountRepository,
     CancellationToken cancellationToken) =>
 {
+    if (!await OrganizationExistsAsync(organizationRepository, organizationId, cancellationToken))
+    {
+        return Results.NotFound();
+    }
+
     var account = await accountRepository.GetByIdAsync(organizationId, accountId, cancellationToken);
     if (account is null)
     {
@@ -179,9 +210,15 @@ app.MapPost("/organizations/{organizationId:guid}/accounts/{accountId:guid}/deac
 
 app.MapPost("/organizations/{organizationId:guid}/accounts/defaults", async (
     Guid organizationId,
+    [FromServices] IOrganizationRepository organizationRepository,
     [FromServices] DefaultChartOfAccountsSeeder seeder,
     CancellationToken cancellationToken) =>
 {
+    if (!await OrganizationExistsAsync(organizationRepository, organizationId, cancellationToken))
+    {
+        return Results.NotFound();
+    }
+
     var createdAccounts = await seeder.SeedAsync(organizationId, cancellationToken: cancellationToken);
     var response = new SeedAccountsResponse(
         organizationId,
@@ -192,5 +229,13 @@ app.MapPost("/organizations/{organizationId:guid}/accounts/defaults", async (
 });
 
 app.Run();
+
+static async Task<bool> OrganizationExistsAsync(
+    IOrganizationRepository organizationRepository,
+    Guid organizationId,
+    CancellationToken cancellationToken)
+{
+    return await organizationRepository.GetByIdAsync(organizationId, cancellationToken) is not null;
+}
 
 public partial class Program;
