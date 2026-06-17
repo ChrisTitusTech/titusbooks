@@ -54,6 +54,43 @@ public sealed class DefaultChartOfAccountsSeederTests
             return Task.CompletedTask;
         }
 
+        public Task<Account?> GetByIdAsync(Guid organizationId, Guid accountId, CancellationToken cancellationToken = default)
+        {
+            var account = accounts.SingleOrDefault(account =>
+                account.OrganizationId == organizationId
+                && account.Id == accountId);
+
+            return Task.FromResult(account);
+        }
+
+        public Task UpdateAsync(Account account, CancellationToken cancellationToken = default)
+        {
+            var index = accounts.FindIndex(existingAccount =>
+                existingAccount.OrganizationId == account.OrganizationId
+                && existingAccount.Id == account.Id);
+
+            if (index >= 0)
+            {
+                accounts[index] = account;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task DeactivateAsync(Guid organizationId, Guid accountId, CancellationToken cancellationToken = default)
+        {
+            var index = accounts.FindIndex(account =>
+                account.OrganizationId == organizationId
+                && account.Id == accountId);
+
+            if (index >= 0)
+            {
+                accounts[index] = accounts[index] with { IsActive = false };
+            }
+
+            return Task.CompletedTask;
+        }
+
         public Task<IReadOnlyList<Account>> ListByOrganizationAsync(
             Guid organizationId,
             CancellationToken cancellationToken = default)

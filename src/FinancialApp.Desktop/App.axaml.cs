@@ -38,8 +38,10 @@ public partial class App : Application
                 .CreateLogger<App>()
                 .LogInformation("{ApplicationName} starting with {EnvironmentName} settings.", settings.ApplicationName, settings.EnvironmentName);
 
-            var viewModel = new MainWindowViewModel(settings);
-            _ = CheckApiHealthAsync(settings, viewModel);
+            var apiHttpClient = CreateApiHttpClient(settings);
+            var viewModel = new MainWindowViewModel(settings, new TitusBooksApiClient(apiHttpClient));
+            _ = CheckApiHealthAsync(apiHttpClient, viewModel);
+            _ = viewModel.InitializeAsync();
 
             desktop.MainWindow = new MainWindow
             {
@@ -50,24 +52,35 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    private static async Task CheckApiHealthAsync(AppSettings settings, MainWindowViewModel viewModel)
+    private static HttpClient CreateApiHttpClient(AppSettings settings)
     {
         if (!Uri.TryCreate(settings.Api.BaseUrl, UriKind.Absolute, out var baseUri))
         {
-            return;
+            return new HttpClient();
         }
 
-        using var httpClient = new HttpClient { BaseAddress = baseUri };
+        return new HttpClient { BaseAddress = baseUri };
+    }
+
+    private static async Task CheckApiHealthAsync(HttpClient httpClient, MainWindowViewModel viewModel)
+    {
         var apiHealthClient = new ApiHealthClient(httpClient);
         await viewModel.CheckApiHealthAsync(apiHealthClient);
     }
 
     private static IConfiguration BuildConfiguration()
     {
+        var currentDirectory = Directory.GetCurrentDirectory();
+        var applicationDirectory = AppContext.BaseDirectory;
+        var projectLocalSettings = Path.Combine(currentDirectory, "src", "FinancialApp.Desktop", "appsettings.Local.json");
+
         return new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
+            .SetBasePath(applicationDirectory)
             .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
             .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
+            .AddJsonFile(Path.Combine(currentDirectory, "appsettings.json"), optional: true, reloadOnChange: true)
+            .AddJsonFile(Path.Combine(currentDirectory, "appsettings.Local.json"), optional: true, reloadOnChange: true)
+            .AddJsonFile(projectLocalSettings, optional: true, reloadOnChange: true)
             .Build();
     }
 }

@@ -40,6 +40,35 @@ public sealed class PostgresAccountRepository : IAccountRepository
         return row?.ToAccount();
     }
 
+    public async Task<Account?> GetByIdAsync(
+        Guid organizationId,
+        Guid accountId,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT
+                id,
+                organization_id AS OrganizationId,
+                name,
+                account_type AS AccountType,
+                account_subtype AS AccountSubtype,
+                currency,
+                parent_account_id AS ParentAccountId,
+                is_active AS IsActive,
+                created_at AS CreatedAt,
+                updated_at AS UpdatedAt
+            FROM accounts
+            WHERE organization_id = @OrganizationId
+              AND id = @AccountId
+            """;
+
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        var row = await connection.QuerySingleOrDefaultAsync<AccountRow>(
+            sql,
+            new { OrganizationId = organizationId, AccountId = accountId });
+        return row?.ToAccount();
+    }
+
     public async Task AddAsync(Account account, CancellationToken cancellationToken = default)
     {
         const string sql = """
@@ -82,6 +111,47 @@ public sealed class PostgresAccountRepository : IAccountRepository
             account.IsActive,
             account.CreatedAt,
             account.UpdatedAt
+        });
+    }
+
+    public async Task UpdateAsync(Account account, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            UPDATE accounts
+            SET name = @Name,
+                account_subtype = @AccountSubtype,
+                updated_at = @UpdatedAt
+            WHERE organization_id = @OrganizationId
+              AND id = @Id
+            """;
+
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await connection.ExecuteAsync(sql, new
+        {
+            account.Id,
+            account.OrganizationId,
+            account.Name,
+            account.AccountSubtype,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+    }
+
+    public async Task DeactivateAsync(Guid organizationId, Guid accountId, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            UPDATE accounts
+            SET is_active = false,
+                updated_at = @UpdatedAt
+            WHERE organization_id = @OrganizationId
+              AND id = @AccountId
+            """;
+
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await connection.ExecuteAsync(sql, new
+        {
+            OrganizationId = organizationId,
+            AccountId = accountId,
+            UpdatedAt = DateTimeOffset.UtcNow
         });
     }
 

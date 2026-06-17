@@ -1,70 +1,244 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:FinancialApp.Desktop.ViewModels"
+        xmlns:api="using:FinancialApp.Core.Api"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d" d:DesignWidth="1180" d:DesignHeight="720"
         x:Class="FinancialApp.Desktop.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
-        Width="920"
-        Height="560"
-        MinWidth="720"
-        MinHeight="420"
+        Width="1180"
+        Height="720"
+        MinWidth="980"
+        MinHeight="620"
         Title="{Binding Title}">
 
     <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
     <Grid RowDefinitions="Auto,*"
-          Background="#F6F7F9">
+          Background="#F5F7FA">
         <Border Grid.Row="0"
-                Background="#1E293B"
-                Padding="24,18">
+                Background="#172033"
+                Padding="28,20">
             <StackPanel Spacing="4">
                 <TextBlock Text="{Binding Title}"
                            Foreground="White"
-                           FontSize="24"
+                           FontSize="28"
                            FontWeight="SemiBold"/>
                 <TextBlock Text="Bookkeeping desktop foundation"
                            Foreground="#CBD5E1"
-                           FontSize="14"/>
+                           FontSize="15"/>
             </StackPanel>
         </Border>
 
         <Grid Grid.Row="1"
-              ColumnDefinitions="220,*">
+              ColumnDefinitions="232,*">
             <Border Background="#E9EDF2"
-                    Padding="18">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Dashboard"
-                               FontWeight="SemiBold"/>
-                    <TextBlock Text="Transactions"/>
-                    <TextBlock Text="Imports"/>
-                    <TextBlock Text="Accounts"/>
-                    <TextBlock Text="Reports"/>
-                    <TextBlock Text="Settings"/>
+                    Padding="20">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="Setup"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               Foreground="#0F172A"/>
+                    <TextBlock Text="Organizations"
+                               Foreground="#334155"/>
+                    <TextBlock Text="Accounts"
+                               Foreground="#334155"/>
+                    <TextBlock Text="Transactions"
+                               Foreground="#64748B"/>
+                    <TextBlock Text="Imports"
+                               Foreground="#64748B"/>
+                    <TextBlock Text="Reports"
+                               Foreground="#64748B"/>
+                    <TextBlock Text="{Binding ApiHealthMessage}"
+                               Margin="0,28,0,0"
+                               TextWrapping="Wrap"
+                               FontSize="13"
+                               Foreground="#334155"/>
                 </StackPanel>
             </Border>
 
-            <StackPanel Grid.Column="1"
-                        Margin="32"
-                        Spacing="16"
-                        VerticalAlignment="Center">
-                <TextBlock Text="{Binding StatusMessage}"
-                           FontSize="22"
-                           FontWeight="SemiBold"/>
-                <TextBlock Text="{Binding DatabaseSummary}"
-                           FontSize="14"
-                           Foreground="#475569"/>
-                <TextBlock Text="{Binding ApiHealthMessage}"
-                           FontSize="14"
-                           Foreground="#475569"/>
-            </StackPanel>
+            <ScrollViewer Grid.Column="1"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <Grid Margin="32"
+                      RowDefinitions="Auto,Auto,*"
+                      RowSpacing="22">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding StatusMessage}"
+                                   FontSize="26"
+                                   FontWeight="SemiBold"
+                                   Foreground="#0F172A"/>
+                        <TextBlock Text="{Binding DatabaseSummary}"
+                                   FontSize="14"
+                                   TextWrapping="Wrap"
+                                   Foreground="#334155"/>
+                        <TextBlock Text="{Binding WorkspaceMessage}"
+                                   FontSize="14"
+                                   TextWrapping="Wrap"
+                                   Foreground="#334155"/>
+                    </StackPanel>
+
+                    <Grid Grid.Row="1"
+                          ColumnDefinitions="*,Auto"
+                          ColumnSpacing="12">
+                        <TextBox MinHeight="40"
+                                 PlaceholderText="Organization name"
+                                 Text="{Binding NewOrganizationName}"
+                                 Background="White"
+                                 Foreground="#111827"
+                                 BorderBrush="#94A3B8"/>
+                        <Button Grid.Column="1"
+                                MinHeight="40"
+                                MinWidth="170"
+                                Command="{Binding CreateOrganizationCommand}"
+                                Content="Create organization"
+                                Background="#2563EB"
+                                Foreground="White"/>
+                    </Grid>
+
+                    <Grid Grid.Row="2"
+                          ColumnDefinitions="320,*"
+                          ColumnSpacing="24"
+                          MinHeight="430">
+                        <Grid RowDefinitions="Auto,*"
+                              RowSpacing="10">
+                            <TextBlock Text="Organizations"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="#0F172A"/>
+                            <ListBox Grid.Row="1"
+                                     MinHeight="360"
+                                     Background="White"
+                                     Foreground="#111827"
+                                     BorderBrush="#CBD5E1"
+                                     ItemsSource="{Binding Organizations}"
+                                     SelectedItem="{Binding SelectedOrganization}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="api:OrganizationSummary">
+                                        <StackPanel Margin="8,6"
+                                                    Spacing="2">
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#111827"/>
+                                            <TextBlock Text="{Binding BaseCurrency}"
+                                                       FontSize="12"
+                                                       Foreground="#64748B"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+
+                        <Grid Grid.Column="1"
+                              RowDefinitions="Auto,Auto,*"
+                              RowSpacing="14">
+                            <Grid ColumnDefinitions="*,Auto"
+                                  ColumnSpacing="12">
+                                <TextBlock Text="Chart of accounts"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Foreground="#0F172A"
+                                           VerticalAlignment="Center"/>
+                                <Button Grid.Column="1"
+                                        MinHeight="36"
+                                        MinWidth="135"
+                                        Command="{Binding SeedDefaultAccountsCommand}"
+                                        Content="Seed defaults"
+                                        Background="White"
+                                        Foreground="#0F172A"
+                                        BorderBrush="#94A3B8"/>
+                            </Grid>
+
+                            <Grid Grid.Row="1"
+                                  RowDefinitions="Auto,Auto"
+                                  RowSpacing="10">
+                                <Grid ColumnDefinitions="2*,160,180"
+                                      ColumnSpacing="10">
+                                    <TextBox MinHeight="40"
+                                             PlaceholderText="Account name or new name"
+                                             Text="{Binding NewAccountName}"
+                                             Background="White"
+                                             Foreground="#111827"
+                                             BorderBrush="#94A3B8"/>
+                                    <ComboBox Grid.Column="1"
+                                              MinHeight="40"
+                                              ItemsSource="{Binding AccountTypes}"
+                                              SelectedItem="{Binding SelectedAccountType}"
+                                              Background="White"
+                                              Foreground="#111827"
+                                              BorderBrush="#94A3B8"/>
+                                    <TextBox Grid.Column="2"
+                                             MinHeight="40"
+                                             PlaceholderText="Subtype"
+                                             Text="{Binding AccountSubtype}"
+                                             Background="White"
+                                             Foreground="#111827"
+                                             BorderBrush="#94A3B8"/>
+                                </Grid>
+
+                                <StackPanel Grid.Row="1"
+                                            Orientation="Horizontal"
+                                            HorizontalAlignment="Right"
+                                            Spacing="10">
+                                    <Button MinHeight="36"
+                                            MinWidth="92"
+                                            Command="{Binding CreateAccountCommand}"
+                                            Content="Add"
+                                            Background="#2563EB"
+                                            Foreground="White"/>
+                                    <Button MinHeight="36"
+                                            MinWidth="108"
+                                            Command="{Binding RenameSelectedAccountCommand}"
+                                            Content="Rename"
+                                            Background="White"
+                                            Foreground="#0F172A"
+                                            BorderBrush="#94A3B8"/>
+                                    <Button MinHeight="36"
+                                            MinWidth="122"
+                                            Command="{Binding DeactivateSelectedAccountCommand}"
+                                            Content="Deactivate"
+                                            Background="White"
+                                            Foreground="#0F172A"
+                                            BorderBrush="#94A3B8"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <ListBox Grid.Row="2"
+                                     MinHeight="310"
+                                     Background="White"
+                                     Foreground="#111827"
+                                     BorderBrush="#CBD5E1"
+                                     ItemsSource="{Binding Accounts}"
+                                     SelectedItem="{Binding SelectedAccount}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="api:AccountSummary">
+                                        <Grid Margin="8,6"
+                                              ColumnDefinitions="2*,120,160,80"
+                                              ColumnSpacing="14">
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#111827"/>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding AccountType}"
+                                                       Foreground="#334155"/>
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding AccountSubtype}"
+                                                       Foreground="#475569"/>
+                                            <TextBlock Grid.Column="3"
+                                                       Text="{Binding IsActive}"
+                                                       Foreground="#475569"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </ScrollViewer>
         </Grid>
     </Grid>
-
 </Window>

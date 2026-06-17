@@ -81,6 +81,70 @@ public sealed class OrganizationEndpointTests
         Assert.Contains(accounts, account => account.Name == "Merchant Fees");
     }
 
+    [Fact]
+    public async Task CreateAccount_CreatesAccount()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = Guid.NewGuid();
+
+        var response = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/accounts",
+            new CreateAccountRequest("Bank Savings", "Asset", "Savings"));
+        var account = await response.Content.ReadFromJsonAsync<AccountResponse>();
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.NotNull(account);
+        Assert.Equal("Bank Savings", account.Name);
+        Assert.Equal("Asset", account.AccountType);
+    }
+
+    [Fact]
+    public async Task UpdateAccount_RenamesAccount()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = Guid.NewGuid();
+        var createResponse = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/accounts",
+            new CreateAccountRequest("Old Name", "Expense"));
+        var createdAccount = await createResponse.Content.ReadFromJsonAsync<AccountResponse>();
+
+        var updateResponse = await client.PutAsJsonAsync(
+            $"/organizations/{organizationId}/accounts/{createdAccount!.Id}",
+            new UpdateAccountRequest("New Name", "Office"));
+        var updatedAccount = await updateResponse.Content.ReadFromJsonAsync<AccountResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        Assert.NotNull(updatedAccount);
+        Assert.Equal("New Name", updatedAccount.Name);
+        Assert.Equal("Office", updatedAccount.AccountSubtype);
+    }
+
+    [Fact]
+    public async Task DeactivateAccount_MarksAccountInactive()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = Guid.NewGuid();
+        var createResponse = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/accounts",
+            new CreateAccountRequest("Temporary", "Expense"));
+        var createdAccount = await createResponse.Content.ReadFromJsonAsync<AccountResponse>();
+
+        var deactivateResponse = await client.PostAsync(
+            $"/organizations/{organizationId}/accounts/{createdAccount!.Id}/deactivate",
+            null);
+        var deactivatedAccount = await deactivateResponse.Content.ReadFromJsonAsync<AccountResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, deactivateResponse.StatusCode);
+        Assert.NotNull(deactivatedAccount);
+        Assert.False(deactivatedAccount.IsActive);
+    }
+
     private static WebApplicationFactory<Program> CreateFactory(InMemoryRepositories repositories)
     {
         return new WebApplicationFactory<Program>()
@@ -130,9 +194,46 @@ public sealed class OrganizationEndpointTests
             return Task.FromResult(account);
         }
 
+        public Task<Account?> GetByIdAsync(Guid organizationId, Guid accountId, CancellationToken cancellationToken = default)
+        {
+            var account = accounts.SingleOrDefault(account =>
+                account.OrganizationId == organizationId
+                && account.Id == accountId);
+
+            return Task.FromResult(account);
+        }
+
         public Task AddAsync(Account account, CancellationToken cancellationToken = default)
         {
             accounts.Add(account);
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateAsync(Account account, CancellationToken cancellationToken = default)
+        {
+            var index = accounts.FindIndex(existingAccount =>
+                existingAccount.OrganizationId == account.OrganizationId
+                && existingAccount.Id == account.Id);
+
+            if (index >= 0)
+            {
+                accounts[index] = account;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task DeactivateAsync(Guid organizationId, Guid accountId, CancellationToken cancellationToken = default)
+        {
+            var index = accounts.FindIndex(account =>
+                account.OrganizationId == organizationId
+                && account.Id == accountId);
+
+            if (index >= 0)
+            {
+                accounts[index] = accounts[index] with { IsActive = false };
+            }
+
             return Task.CompletedTask;
         }
 

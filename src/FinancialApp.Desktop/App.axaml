@@ -2,8 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="FinancialApp.Desktop.App"
              xmlns:local="using:FinancialApp.Desktop"
-             RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+             RequestedThemeVariant="Light">
+             <!-- Use a fixed light shell until the app has full theme-aware resources. -->
 
     <Application.DataTemplates>
         <local:ViewLocator/>

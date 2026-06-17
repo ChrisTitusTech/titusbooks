@@ -92,6 +92,91 @@ app.MapGet("/organizations/{organizationId:guid}/accounts", async (
     return Results.Ok(accounts.Select(AccountResponse.FromAccount));
 });
 
+app.MapPost("/organizations/{organizationId:guid}/accounts", async (
+    Guid organizationId,
+    CreateAccountRequest request,
+    [FromServices] IAccountRepository accountRepository,
+    CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Name))
+    {
+        return Results.BadRequest(new { error = "Account name is required." });
+    }
+
+    if (!Enum.TryParse<AccountType>(request.AccountType, ignoreCase: true, out var accountType))
+    {
+        return Results.BadRequest(new { error = "Account type must be Asset, Liability, Equity, Income, or Expense." });
+    }
+
+    var existingAccount = await accountRepository.FindByNameAsync(organizationId, request.Name.Trim(), cancellationToken);
+    if (existingAccount is not null)
+    {
+        return Results.Conflict(new { error = "An account with that name already exists." });
+    }
+
+    var account = new Account
+    {
+        Id = Guid.NewGuid(),
+        OrganizationId = organizationId,
+        Name = request.Name.Trim(),
+        AccountType = accountType,
+        AccountSubtype = string.IsNullOrWhiteSpace(request.AccountSubtype) ? null : request.AccountSubtype.Trim(),
+        Currency = string.IsNullOrWhiteSpace(request.Currency) ? "USD" : request.Currency.Trim().ToUpperInvariant(),
+        ParentAccountId = request.ParentAccountId
+    };
+
+    await accountRepository.AddAsync(account, cancellationToken);
+
+    return Results.Created($"/organizations/{organizationId}/accounts/{account.Id}", AccountResponse.FromAccount(account));
+});
+
+app.MapPut("/organizations/{organizationId:guid}/accounts/{accountId:guid}", async (
+    Guid organizationId,
+    Guid accountId,
+    UpdateAccountRequest request,
+    [FromServices] IAccountRepository accountRepository,
+    CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Name))
+    {
+        return Results.BadRequest(new { error = "Account name is required." });
+    }
+
+    var account = await accountRepository.GetByIdAsync(organizationId, accountId, cancellationToken);
+    if (account is null)
+    {
+        return Results.NotFound();
+    }
+
+    var updatedAccount = account with
+    {
+        Name = request.Name.Trim(),
+        AccountSubtype = string.IsNullOrWhiteSpace(request.AccountSubtype) ? null : request.AccountSubtype.Trim(),
+        UpdatedAt = DateTimeOffset.UtcNow
+    };
+
+    await accountRepository.UpdateAsync(updatedAccount, cancellationToken);
+
+    return Results.Ok(AccountResponse.FromAccount(updatedAccount));
+});
+
+app.MapPost("/organizations/{organizationId:guid}/accounts/{accountId:guid}/deactivate", async (
+    Guid organizationId,
+    Guid accountId,
+    [FromServices] IAccountRepository accountRepository,
+    CancellationToken cancellationToken) =>
+{
+    var account = await accountRepository.GetByIdAsync(organizationId, accountId, cancellationToken);
+    if (account is null)
+    {
+        return Results.NotFound();
+    }
+
+    await accountRepository.DeactivateAsync(organizationId, accountId, cancellationToken);
+
+    return Results.Ok(AccountResponse.FromAccount(account with { IsActive = false, UpdatedAt = DateTimeOffset.UtcNow }));
+});
+
 app.MapPost("/organizations/{organizationId:guid}/accounts/defaults", async (
     Guid organizationId,
     [FromServices] DefaultChartOfAccountsSeeder seeder,
