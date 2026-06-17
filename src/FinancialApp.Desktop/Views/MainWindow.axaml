@@ -60,7 +60,7 @@
                 <TextBlock Text="{Binding DatabaseSummary}"
                            FontSize="14"
                            Foreground="#475569"/>
-                <TextBlock Text="No database connection is opened in Phase 0."
+                <TextBlock Text="{Binding ApiHealthMessage}"
                            FontSize="14"
                            Foreground="#475569"/>
             </StackPanel>

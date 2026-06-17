@@ -1,9 +1,14 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using FinancialApp.Core.Api;
 using FinancialApp.Core.Application;
 
 namespace FinancialApp.Desktop.ViewModels;
 
-public partial class MainWindowViewModel : ViewModelBase
+public sealed partial class MainWindowViewModel : ViewModelBase
 {
+    [ObservableProperty]
+    private string apiHealthMessage = "API health has not been checked.";
+
     public MainWindowViewModel()
         : this(new AppSettings())
     {
@@ -12,7 +17,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public MainWindowViewModel(AppSettings settings)
     {
         Title = settings.ApplicationName;
-        StatusMessage = "Phase 0 foundation is ready.";
+        StatusMessage = "Checking API connection...";
         DatabaseSummary = $"API target: {settings.Api.BaseUrl}";
     }
 
@@ -21,4 +26,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public string StatusMessage { get; }
 
     public string DatabaseSummary { get; }
+
+    public async Task CheckApiHealthAsync(ApiHealthClient apiHealthClient, CancellationToken cancellationToken = default)
+    {
+        var health = await apiHealthClient.CheckHealthAsync(cancellationToken);
+        ApiHealthMessage = health.Message;
+    }
 }

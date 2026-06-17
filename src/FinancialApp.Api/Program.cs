@@ -19,7 +19,9 @@ if (!string.IsNullOrWhiteSpace(postgresConnectionString))
     builder.Services.AddSingleton(new DatabaseConnectionFactory(postgresConnectionString));
     builder.Services.AddScoped<IOrganizationRepository, PostgresOrganizationRepository>();
     builder.Services.AddScoped<IAccountRepository, PostgresAccountRepository>();
+    builder.Services.AddScoped<IJournalEntryRepository, PostgresJournalEntryRepository>();
     builder.Services.AddScoped<DefaultChartOfAccountsSeeder>();
+    builder.Services.AddScoped<AccountingService>();
 }
 
 var app = builder.Build();
