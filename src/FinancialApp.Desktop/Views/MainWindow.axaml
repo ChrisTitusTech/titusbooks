@@ -48,7 +48,7 @@
                     <TextBlock Text="Accounts"
                                Foreground="#334155"/>
                     <TextBlock Text="Transactions"
-                               Foreground="#64748B"/>
+                               Foreground="#334155"/>
                     <TextBlock Text="Imports"
                                Foreground="#64748B"/>
                     <TextBlock Text="Reports"
@@ -65,7 +65,7 @@
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <Grid Margin="32"
-                      RowDefinitions="Auto,Auto,*"
+                      RowDefinitions="Auto,Auto,Auto,Auto"
                       RowSpacing="22">
                     <StackPanel Spacing="8">
                         <TextBlock Text="{Binding StatusMessage}"
@@ -235,6 +235,182 @@
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
+                        </Grid>
+                    </Grid>
+
+                    <Grid Grid.Row="3"
+                          RowDefinitions="Auto,*"
+                          RowSpacing="12"
+                          MinHeight="330">
+                        <TextBlock Text="Manual transactions"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="#0F172A"/>
+
+                        <Grid Grid.Row="1"
+                              ColumnDefinitions="420,*"
+                              ColumnSpacing="24">
+                            <Grid RowDefinitions="Auto,Auto,Auto"
+                                  RowSpacing="12">
+                                <Grid ColumnDefinitions="140,140,*"
+                                      ColumnSpacing="10">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Type"
+                                                   FontSize="12"
+                                                   Foreground="#475569"/>
+                                        <ComboBox MinHeight="40"
+                                                  ItemsSource="{Binding TransactionTypes}"
+                                                  SelectedItem="{Binding SelectedTransactionType}"
+                                                  Background="White"
+                                                  Foreground="#111827"
+                                                  BorderBrush="#94A3B8"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1"
+                                                Spacing="4">
+                                        <TextBlock Text="Date"
+                                                   FontSize="12"
+                                                   Foreground="#475569"/>
+                                        <TextBox MinHeight="40"
+                                                 Text="{Binding TransactionDate}"
+                                                 Background="White"
+                                                 Foreground="#111827"
+                                                 BorderBrush="#94A3B8"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2"
+                                                Spacing="4">
+                                        <TextBlock Text="Amount"
+                                                   FontSize="12"
+                                                   Foreground="#475569"/>
+                                        <TextBox MinHeight="40"
+                                                 Text="{Binding TransactionAmount}"
+                                                 Background="White"
+                                                 Foreground="#111827"
+                                                 BorderBrush="#94A3B8"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid Grid.Row="1"
+                                      ColumnDefinitions="*,*"
+                                      ColumnSpacing="10">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{Binding FromAccountLabel}"
+                                                   FontSize="12"
+                                                   Foreground="#475569"/>
+                                        <ComboBox MinHeight="40"
+                                                  ItemsSource="{Binding FromAccountOptions}"
+                                                  SelectedItem="{Binding SelectedFromAccount}"
+                                                  Background="White"
+                                                  Foreground="#111827"
+                                                  BorderBrush="#94A3B8">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="api:AccountSummary">
+                                                    <TextBlock Text="{Binding Name}"
+                                                               Foreground="#111827"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1"
+                                                Spacing="4">
+                                        <TextBlock Text="{Binding ToAccountLabel}"
+                                                   FontSize="12"
+                                                   Foreground="#475569"/>
+                                        <ComboBox MinHeight="40"
+                                                  ItemsSource="{Binding ToAccountOptions}"
+                                                  SelectedItem="{Binding SelectedToAccount}"
+                                                  Background="White"
+                                                  Foreground="#111827"
+                                                  BorderBrush="#94A3B8">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="api:AccountSummary">
+                                                    <TextBlock Text="{Binding Name}"
+                                                               Foreground="#111827"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid Grid.Row="2"
+                                      ColumnDefinitions="*,Auto"
+                                      ColumnSpacing="10">
+                                    <TextBox MinHeight="40"
+                                             PlaceholderText="Memo"
+                                             Text="{Binding TransactionMemo}"
+                                             Background="White"
+                                             Foreground="#111827"
+                                             BorderBrush="#94A3B8"/>
+                                    <Button Grid.Column="1"
+                                            MinHeight="40"
+                                            MinWidth="150"
+                                            Command="{Binding PostManualTransactionCommand}"
+                                            Content="{Binding PostTransactionButtonText}"
+                                            Background="#2563EB"
+                                            Foreground="White"/>
+                                </Grid>
+                            </Grid>
+
+                            <Grid Grid.Column="1"
+                                  RowDefinitions="Auto,*"
+                                  RowSpacing="10">
+                                <Grid ColumnDefinitions="*,Auto"
+                                      ColumnSpacing="10">
+                                    <ComboBox MinHeight="40"
+                                              ItemsSource="{Binding Accounts}"
+                                              SelectedItem="{Binding SelectedRegisterAccount}"
+                                              Background="White"
+                                              Foreground="#111827"
+                                              BorderBrush="#94A3B8">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="api:AccountSummary">
+                                                <TextBlock Text="{Binding Name}"
+                                                           Foreground="#111827"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <Button Grid.Column="1"
+                                            MinHeight="40"
+                                            MinWidth="120"
+                                            Command="{Binding LoadRegisterCommand}"
+                                            Content="Refresh"
+                                            Background="White"
+                                            Foreground="#0F172A"
+                                            BorderBrush="#94A3B8"/>
+                                </Grid>
+
+                                <ListBox Grid.Row="1"
+                                         MinHeight="250"
+                                         Background="White"
+                                         Foreground="#111827"
+                                         BorderBrush="#CBD5E1"
+                                         ItemsSource="{Binding RegisterEntries}">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="api:AccountRegisterEntrySummary">
+                                            <Grid Margin="8,6"
+                                                  ColumnDefinitions="92,2*,80,80,2*"
+                                                  ColumnSpacing="12">
+                                                <TextBlock Text="{Binding EntryDate}"
+                                                           Foreground="#334155"/>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding Memo}"
+                                                           Foreground="#111827"/>
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding Debit}"
+                                                           Foreground="#334155"/>
+                                                <TextBlock Grid.Column="3"
+                                                           Text="{Binding Credit}"
+                                                           Foreground="#334155"/>
+                                                <TextBlock Grid.Column="4"
+                                                           Text="{Binding OtherAccounts}"
+                                                           Foreground="#475569"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Grid>
                         </Grid>
                     </Grid>
                 </Grid>

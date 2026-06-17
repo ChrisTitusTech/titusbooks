@@ -190,8 +190,8 @@ public sealed class PostgresAccountRepository : IAccountRepository
         string Currency,
         Guid? ParentAccountId,
         bool IsActive,
-        DateTimeOffset CreatedAt,
-        DateTimeOffset UpdatedAt)
+        DateTime CreatedAt,
+        DateTime UpdatedAt)
     {
         public Account ToAccount()
         {
@@ -205,9 +205,14 @@ public sealed class PostgresAccountRepository : IAccountRepository
                 Currency = Currency,
                 ParentAccountId = ParentAccountId,
                 IsActive = IsActive,
-                CreatedAt = CreatedAt,
-                UpdatedAt = UpdatedAt
+                CreatedAt = ToUtcOffset(CreatedAt),
+                UpdatedAt = ToUtcOffset(UpdatedAt)
             };
         }
+    }
+
+    private static DateTimeOffset ToUtcOffset(DateTime value)
+    {
+        return new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Utc));
     }
 }

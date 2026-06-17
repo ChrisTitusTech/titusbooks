@@ -228,6 +228,135 @@ app.MapPost("/organizations/{organizationId:guid}/accounts/defaults", async (
     return Results.Ok(response);
 });
 
+app.MapPost("/organizations/{organizationId:guid}/transactions/expenses", async (
+    Guid organizationId,
+    PostExpenseRequest request,
+    [FromServices] IOrganizationRepository organizationRepository,
+    [FromServices] AccountingService accountingService,
+    CancellationToken cancellationToken) =>
+{
+    if (!await OrganizationExistsAsync(organizationRepository, organizationId, cancellationToken))
+    {
+        return Results.NotFound();
+    }
+
+    try
+    {
+        var entry = await accountingService.PostExpenseAsync(new ManualExpense(
+            organizationId,
+            request.EntryDate,
+            request.PaymentAccountId,
+            request.ExpenseAccountId,
+            request.Amount,
+            request.Memo),
+            cancellationToken);
+
+        return Results.Created(
+            $"/organizations/{organizationId}/journal-entries/{entry.Id}",
+            JournalEntryResponse.FromJournalEntry(entry));
+    }
+    catch (AccountingException exception)
+    {
+        return Results.BadRequest(new { error = exception.Message });
+    }
+});
+
+app.MapPost("/organizations/{organizationId:guid}/transactions/income", async (
+    Guid organizationId,
+    PostIncomeRequest request,
+    [FromServices] IOrganizationRepository organizationRepository,
+    [FromServices] AccountingService accountingService,
+    CancellationToken cancellationToken) =>
+{
+    if (!await OrganizationExistsAsync(organizationRepository, organizationId, cancellationToken))
+    {
+        return Results.NotFound();
+    }
+
+    try
+    {
+        var entry = await accountingService.PostIncomeAsync(new ManualIncome(
+            organizationId,
+            request.EntryDate,
+            request.DepositAccountId,
+            request.IncomeAccountId,
+            request.Amount,
+            request.Memo),
+            cancellationToken);
+
+        return Results.Created(
+            $"/organizations/{organizationId}/journal-entries/{entry.Id}",
+            JournalEntryResponse.FromJournalEntry(entry));
+    }
+    catch (AccountingException exception)
+    {
+        return Results.BadRequest(new { error = exception.Message });
+    }
+});
+
+app.MapPost("/organizations/{organizationId:guid}/transactions/transfers", async (
+    Guid organizationId,
+    PostTransferRequest request,
+    [FromServices] IOrganizationRepository organizationRepository,
+    [FromServices] AccountingService accountingService,
+    CancellationToken cancellationToken) =>
+{
+    if (!await OrganizationExistsAsync(organizationRepository, organizationId, cancellationToken))
+    {
+        return Results.NotFound();
+    }
+
+    try
+    {
+        var entry = await accountingService.PostTransferAsync(new ManualTransfer(
+            organizationId,
+            request.EntryDate,
+            request.FromAccountId,
+            request.ToAccountId,
+            request.Amount,
+            request.Memo),
+            cancellationToken);
+
+        return Results.Created(
+            $"/organizations/{organizationId}/journal-entries/{entry.Id}",
+            JournalEntryResponse.FromJournalEntry(entry));
+    }
+    catch (AccountingException exception)
+    {
+        return Results.BadRequest(new { error = exception.Message });
+    }
+});
+
+app.MapGet("/organizations/{organizationId:guid}/accounts/{accountId:guid}/register", async (
+    Guid organizationId,
+    Guid accountId,
+    DateOnly? startDate,
+    DateOnly? endDate,
+    [FromServices] IOrganizationRepository organizationRepository,
+    [FromServices] IAccountRepository accountRepository,
+    [FromServices] IJournalEntryRepository journalEntryRepository,
+    CancellationToken cancellationToken) =>
+{
+    if (!await OrganizationExistsAsync(organizationRepository, organizationId, cancellationToken))
+    {
+        return Results.NotFound();
+    }
+
+    if (await accountRepository.GetByIdAsync(organizationId, accountId, cancellationToken) is null)
+    {
+        return Results.NotFound();
+    }
+
+    var entries = await journalEntryRepository.ListRegisterAsync(
+        organizationId,
+        accountId,
+        startDate,
+        endDate,
+        cancellationToken);
+
+    return Results.Ok(entries.Select(AccountRegisterEntryResponse.FromRegisterEntry));
+});
+
 app.Run();
 
 static async Task<bool> OrganizationExistsAsync(

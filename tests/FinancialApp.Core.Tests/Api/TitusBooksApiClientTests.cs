@@ -104,6 +104,73 @@ public sealed class TitusBooksApiClientTests
         Assert.Equal("Account name is required.", exception.Message);
     }
 
+    [Fact]
+    public async Task PostExpenseAsync_ReturnsJournalEntry()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal(
+                "/organizations/11111111-1111-1111-1111-111111111111/transactions/expenses",
+                request.RequestUri?.AbsolutePath);
+
+            return new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent(
+                    """{"id":"33333333-3333-3333-3333-333333333333","organizationId":"11111111-1111-1111-1111-111111111111","entryDate":"2026-06-17","memo":"Office supplies","totalDebits":42.00,"totalCredits":42.00,"lines":[]}""")
+            };
+        }))
+        {
+            BaseAddress = new Uri("http://127.0.0.1:5000")
+        };
+        var client = new TitusBooksApiClient(httpClient);
+
+        var entry = await client.PostExpenseAsync(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            new PostExpenseCommand(
+                new DateOnly(2026, 6, 17),
+                Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                Guid.Parse("44444444-4444-4444-4444-444444444444"),
+                42.00m,
+                "Office supplies"));
+
+        Assert.Equal(42.00m, entry.TotalDebits);
+        Assert.Equal(42.00m, entry.TotalCredits);
+    }
+
+    [Fact]
+    public async Task ListRegisterAsync_ReturnsEntries()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            Assert.Equal(HttpMethod.Get, request.Method);
+            Assert.Equal(
+                "/organizations/11111111-1111-1111-1111-111111111111/accounts/22222222-2222-2222-2222-222222222222/register",
+                request.RequestUri?.AbsolutePath);
+            Assert.Equal("?startDate=2026-06-01&endDate=2026-06-30", request.RequestUri?.Query);
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """[{"journalEntryId":"33333333-3333-3333-3333-333333333333","entryDate":"2026-06-17","memo":"Office supplies","debit":0,"credit":42.00,"otherAccounts":"Office Supplies"}]""")
+            };
+        }))
+        {
+            BaseAddress = new Uri("http://127.0.0.1:5000")
+        };
+        var client = new TitusBooksApiClient(httpClient);
+
+        var entries = await client.ListRegisterAsync(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            new DateOnly(2026, 6, 1),
+            new DateOnly(2026, 6, 30));
+
+        var entry = Assert.Single(entries);
+        Assert.Equal(42.00m, entry.Credit);
+        Assert.Equal("Office Supplies", entry.OtherAccounts);
+    }
+
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> handler;

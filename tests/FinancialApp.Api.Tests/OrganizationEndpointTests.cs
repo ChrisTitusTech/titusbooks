@@ -181,6 +181,111 @@ public sealed class OrganizationEndpointTests
         Assert.False(deactivatedAccount.IsActive);
     }
 
+    [Fact]
+    public async Task PostExpense_CreatesBalancedJournalEntry()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = await CreateOrganizationAsync(client);
+        var checking = await CreateAccountAsync(client, organizationId, "Checking", "Asset", "Checking");
+        var supplies = await CreateAccountAsync(client, organizationId, "Office Supplies", "Expense");
+
+        var response = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/transactions/expenses",
+            new PostExpenseRequest(
+                new DateOnly(2026, 6, 17),
+                checking.Id,
+                supplies.Id,
+                42.00m,
+                "Office supplies"));
+        var entry = await response.Content.ReadFromJsonAsync<JournalEntryResponse>();
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.NotNull(entry);
+        Assert.Equal(42.00m, entry.TotalDebits);
+        Assert.Equal(42.00m, entry.TotalCredits);
+        Assert.Contains(entry.Lines, line => line.AccountId == supplies.Id && line.Debit == 42.00m);
+        Assert.Contains(entry.Lines, line => line.AccountId == checking.Id && line.Credit == 42.00m);
+    }
+
+    [Fact]
+    public async Task PostIncome_CreatesBalancedJournalEntry()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = await CreateOrganizationAsync(client);
+        var checking = await CreateAccountAsync(client, organizationId, "Checking", "Asset", "Checking");
+        var consulting = await CreateAccountAsync(client, organizationId, "Consulting Income", "Income");
+
+        var response = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/transactions/income",
+            new PostIncomeRequest(
+                new DateOnly(2026, 6, 17),
+                checking.Id,
+                consulting.Id,
+                250.00m,
+                "Consulting income"));
+        var entry = await response.Content.ReadFromJsonAsync<JournalEntryResponse>();
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.NotNull(entry);
+        Assert.Equal(250.00m, entry.TotalDebits);
+        Assert.Equal(250.00m, entry.TotalCredits);
+        Assert.Contains(entry.Lines, line => line.AccountId == checking.Id && line.Debit == 250.00m);
+        Assert.Contains(entry.Lines, line => line.AccountId == consulting.Id && line.Credit == 250.00m);
+    }
+
+    [Fact]
+    public async Task PostTransfer_RejectsSameAccount()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = await CreateOrganizationAsync(client);
+        var checking = await CreateAccountAsync(client, organizationId, "Checking", "Asset", "Checking");
+
+        var response = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/transactions/transfers",
+            new PostTransferRequest(
+                new DateOnly(2026, 6, 17),
+                checking.Id,
+                checking.Id,
+                25.00m,
+                "Invalid transfer"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ListRegister_ReturnsPostedAccountEntries()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = await CreateOrganizationAsync(client);
+        var checking = await CreateAccountAsync(client, organizationId, "Checking", "Asset", "Checking");
+        var supplies = await CreateAccountAsync(client, organizationId, "Office Supplies", "Expense");
+        await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/transactions/expenses",
+            new PostExpenseRequest(
+                new DateOnly(2026, 6, 17),
+                checking.Id,
+                supplies.Id,
+                42.00m,
+                "Office supplies"));
+
+        var response = await client.GetAsync($"/organizations/{organizationId}/accounts/{checking.Id}/register");
+        var register = await response.Content.ReadFromJsonAsync<List<AccountRegisterEntryResponse>>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(register);
+        var entry = Assert.Single(register);
+        Assert.Equal(42.00m, entry.Credit);
+        Assert.Equal("Office Supplies", entry.OtherAccounts);
+    }
+
     private static async Task<Guid> CreateOrganizationAsync(HttpClient client)
     {
         var response = await client.PostAsJsonAsync(
@@ -188,6 +293,20 @@ public sealed class OrganizationEndpointTests
             new CreateOrganizationRequest($"Test Organization {Guid.NewGuid():N}", "USD", 1));
         var organization = await response.Content.ReadFromJsonAsync<OrganizationResponse>();
         return organization!.Id;
+    }
+
+    private static async Task<AccountResponse> CreateAccountAsync(
+        HttpClient client,
+        Guid organizationId,
+        string name,
+        string accountType,
+        string? accountSubtype = null)
+    {
+        var response = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/accounts",
+            new CreateAccountRequest(name, accountType, accountSubtype));
+        var account = await response.Content.ReadFromJsonAsync<AccountResponse>();
+        return account!;
     }
 
     private static WebApplicationFactory<Program> CreateFactory(InMemoryRepositories repositories)
@@ -199,17 +318,22 @@ public sealed class OrganizationEndpointTests
                 {
                     services.RemoveAll<IOrganizationRepository>();
                     services.RemoveAll<IAccountRepository>();
+                    services.RemoveAll<IJournalEntryRepository>();
                     services.RemoveAll<DefaultChartOfAccountsSeeder>();
+                    services.RemoveAll<AccountingService>();
                     services.AddSingleton<IOrganizationRepository>(repositories);
                     services.AddSingleton<IAccountRepository>(repositories);
+                    services.AddSingleton<IJournalEntryRepository>(repositories);
                     services.AddSingleton<DefaultChartOfAccountsSeeder>();
+                    services.AddSingleton<AccountingService>();
                 });
             });
     }
 
-    private sealed class InMemoryRepositories : IOrganizationRepository, IAccountRepository
+    private sealed class InMemoryRepositories : IOrganizationRepository, IAccountRepository, IJournalEntryRepository
     {
         private readonly List<Account> accounts = [];
+        private readonly List<JournalEntry> journalEntries = [];
 
         public List<Organization> Organizations { get; } = [];
 
@@ -286,6 +410,39 @@ public sealed class OrganizationEndpointTests
         {
             return Task.FromResult<IReadOnlyList<Account>>(
                 accounts.Where(account => account.OrganizationId == organizationId).ToList());
+        }
+
+        public Task AddAsync(JournalEntry journalEntry, CancellationToken cancellationToken = default)
+        {
+            journalEntries.Add(journalEntry);
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<AccountRegisterEntry>> ListRegisterAsync(
+            Guid organizationId,
+            Guid accountId,
+            DateOnly? startDate = null,
+            DateOnly? endDate = null,
+            CancellationToken cancellationToken = default)
+        {
+            var registerEntries = journalEntries
+                .Where(entry => entry.OrganizationId == organizationId)
+                .Where(entry => startDate is null || entry.EntryDate >= startDate)
+                .Where(entry => endDate is null || entry.EntryDate <= endDate)
+                .SelectMany(entry => entry.Lines
+                    .Where(line => line.AccountId == accountId)
+                    .Select(line => new AccountRegisterEntry(
+                        entry.Id,
+                        entry.EntryDate,
+                        entry.Memo,
+                        line.Debit,
+                        line.Credit,
+                        string.Join(", ", entry.Lines
+                            .Where(otherLine => otherLine.AccountId != accountId)
+                            .Select(otherLine => accounts.Single(account => account.Id == otherLine.AccountId).Name)))))
+                .ToList();
+
+            return Task.FromResult<IReadOnlyList<AccountRegisterEntry>>(registerEntries);
         }
     }
 }

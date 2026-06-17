@@ -56,8 +56,8 @@ public sealed class PostgresOrganizationRepository : IOrganizationRepository
             """;
 
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        var organizations = await connection.QueryAsync<Organization>(sql);
-        return organizations.ToList();
+        var rows = await connection.QueryAsync<OrganizationRow>(sql);
+        return rows.Select(row => row.ToOrganization()).ToList();
     }
 
     public async Task<Organization?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -76,6 +76,36 @@ public sealed class PostgresOrganizationRepository : IOrganizationRepository
             """;
 
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        return await connection.QuerySingleOrDefaultAsync<Organization>(sql, new { Id = id });
+        var row = await connection.QuerySingleOrDefaultAsync<OrganizationRow>(sql, new { Id = id });
+        return row?.ToOrganization();
+    }
+
+    private sealed record OrganizationRow(
+        Guid Id,
+        string Name,
+        string BaseCurrency,
+        int FiscalYearStartMonth,
+        string AccountingMethod,
+        DateTime CreatedAt,
+        DateTime UpdatedAt)
+    {
+        public Organization ToOrganization()
+        {
+            return new Organization
+            {
+                Id = Id,
+                Name = Name,
+                BaseCurrency = BaseCurrency,
+                FiscalYearStartMonth = FiscalYearStartMonth,
+                AccountingMethod = AccountingMethod,
+                CreatedAt = ToUtcOffset(CreatedAt),
+                UpdatedAt = ToUtcOffset(UpdatedAt)
+            };
+        }
+    }
+
+    private static DateTimeOffset ToUtcOffset(DateTime value)
+    {
+        return new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Utc));
     }
 }

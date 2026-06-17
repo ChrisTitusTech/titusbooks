@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FinancialApp.Core.Api;
@@ -31,6 +32,27 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private AccountSummary? selectedAccount;
+
+    [ObservableProperty]
+    private string selectedTransactionType = "Expense";
+
+    [ObservableProperty]
+    private string transactionDate = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    [ObservableProperty]
+    private string transactionAmount = string.Empty;
+
+    [ObservableProperty]
+    private string transactionMemo = string.Empty;
+
+    [ObservableProperty]
+    private AccountSummary? selectedFromAccount;
+
+    [ObservableProperty]
+    private AccountSummary? selectedToAccount;
+
+    [ObservableProperty]
+    private AccountSummary? selectedRegisterAccount;
 
     private readonly TitusBooksApiClient? apiClient;
     private int accountLoadVersion;
@@ -67,6 +89,40 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         "Expense"
     ];
 
+    public IReadOnlyList<string> TransactionTypes { get; } =
+    [
+        "Expense",
+        "Income",
+        "Transfer"
+    ];
+
+    public ObservableCollection<AccountSummary> FromAccountOptions { get; } = [];
+
+    public ObservableCollection<AccountSummary> ToAccountOptions { get; } = [];
+
+    public ObservableCollection<AccountRegisterEntrySummary> RegisterEntries { get; } = [];
+
+    public string FromAccountLabel => SelectedTransactionType switch
+    {
+        "Income" => "Deposited to",
+        "Transfer" => "From account",
+        _ => "Paid from"
+    };
+
+    public string ToAccountLabel => SelectedTransactionType switch
+    {
+        "Income" => "Income source",
+        "Transfer" => "To account",
+        _ => "Expense category"
+    };
+
+    public string PostTransactionButtonText => SelectedTransactionType switch
+    {
+        "Income" => "Record income",
+        "Transfer" => "Record transfer",
+        _ => "Record expense"
+    };
+
     public async Task CheckApiHealthAsync(ApiHealthClient apiHealthClient, CancellationToken cancellationToken = default)
     {
         var health = await apiHealthClient.CheckHealthAsync(cancellationToken);
@@ -102,6 +158,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             if (SelectedOrganization is null)
             {
                 Accounts.Clear();
+                RegisterEntries.Clear();
+                RefreshTransactionAccountOptions();
             }
 
             WorkspaceMessage = Organizations.Count == 0
@@ -152,6 +210,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             Accounts.Clear();
             SelectedAccount = null;
+            SelectedRegisterAccount = null;
+            RegisterEntries.Clear();
+            RefreshTransactionAccountOptions();
             return;
         }
 
@@ -183,6 +244,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             }
 
             SelectedAccount = Accounts.FirstOrDefault();
+            SelectedRegisterAccount ??= Accounts.FirstOrDefault();
+            RefreshTransactionAccountOptions();
             WorkspaceMessage = "Accounts loaded.";
         }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
@@ -239,6 +302,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                     string.IsNullOrWhiteSpace(AccountSubtype) ? null : AccountSubtype.Trim()));
             Accounts.Add(account);
             SelectedAccount = account;
+            SelectedRegisterAccount ??= account;
+            RefreshTransactionAccountOptions();
             NewAccountName = string.Empty;
             AccountSubtype = string.Empty;
             WorkspaceMessage = "Account created.";
@@ -307,6 +372,94 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
+    public async Task PostManualTransactionAsync()
+    {
+        if (apiClient is null || SelectedOrganization is null)
+        {
+            WorkspaceMessage = "Select an organization first.";
+            return;
+        }
+
+        if (SelectedFromAccount is null || SelectedToAccount is null)
+        {
+            WorkspaceMessage = "Select both accounts for the transaction.";
+            return;
+        }
+
+        if (!DateOnly.TryParse(TransactionDate, CultureInfo.InvariantCulture, out var entryDate))
+        {
+            WorkspaceMessage = "Enter the date as YYYY-MM-DD.";
+            return;
+        }
+
+        if (!decimal.TryParse(
+            TransactionAmount,
+            NumberStyles.Currency,
+            CultureInfo.InvariantCulture,
+            out var amount)
+            || amount <= 0)
+        {
+            WorkspaceMessage = "Enter an amount greater than zero.";
+            return;
+        }
+
+        try
+        {
+            var memo = string.IsNullOrWhiteSpace(TransactionMemo) ? null : TransactionMemo.Trim();
+            var entry = SelectedTransactionType switch
+            {
+                "Income" => await apiClient.PostIncomeAsync(
+                    SelectedOrganization.Id,
+                    new PostIncomeCommand(entryDate, SelectedFromAccount.Id, SelectedToAccount.Id, amount, memo)),
+                "Transfer" => await apiClient.PostTransferAsync(
+                    SelectedOrganization.Id,
+                    new PostTransferCommand(entryDate, SelectedFromAccount.Id, SelectedToAccount.Id, amount, memo)),
+                _ => await apiClient.PostExpenseAsync(
+                    SelectedOrganization.Id,
+                    new PostExpenseCommand(entryDate, SelectedFromAccount.Id, SelectedToAccount.Id, amount, memo))
+            };
+
+            TransactionAmount = string.Empty;
+            TransactionMemo = string.Empty;
+            WorkspaceMessage = $"Transaction posted. Journal entry {entry.Id}.";
+            await LoadRegisterAsync();
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            WorkspaceMessage = exception.Message;
+        }
+    }
+
+    [RelayCommand]
+    public async Task LoadRegisterAsync()
+    {
+        if (apiClient is null || SelectedOrganization is null || SelectedRegisterAccount is null)
+        {
+            RegisterEntries.Clear();
+            return;
+        }
+
+        try
+        {
+            RegisterEntries.Clear();
+            var entries = await apiClient.ListRegisterAsync(SelectedOrganization.Id, SelectedRegisterAccount.Id);
+
+            foreach (var entry in entries)
+            {
+                RegisterEntries.Add(entry);
+            }
+
+            WorkspaceMessage = RegisterEntries.Count == 0
+                ? "No register entries for the selected account."
+                : "Register loaded.";
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            WorkspaceMessage = exception.Message;
+        }
+    }
+
     partial void OnSelectedOrganizationChanged(OrganizationSummary? value)
     {
         if (value is null)
@@ -317,6 +470,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
 
         _ = LoadAccountsForOrganizationAsync(value);
+    }
+
+    partial void OnSelectedTransactionTypeChanged(string value)
+    {
+        OnPropertyChanged(nameof(FromAccountLabel));
+        OnPropertyChanged(nameof(ToAccountLabel));
+        OnPropertyChanged(nameof(PostTransactionButtonText));
+        RefreshTransactionAccountOptions();
+    }
+
+    partial void OnSelectedRegisterAccountChanged(AccountSummary? value)
+    {
+        _ = LoadRegisterAsync();
     }
 
     private void ReplaceAccount(AccountSummary account)
@@ -333,5 +499,60 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
 
         Accounts[existingIndex.Value] = account;
+        RefreshTransactionAccountOptions();
+    }
+
+    private void RefreshTransactionAccountOptions()
+    {
+        FromAccountOptions.Clear();
+        ToAccountOptions.Clear();
+
+        var fromAccounts = Accounts.Where(IsFromAccountOption).ToList();
+        var toAccounts = Accounts.Where(IsToAccountOption).ToList();
+
+        foreach (var account in fromAccounts)
+        {
+            FromAccountOptions.Add(account);
+        }
+
+        foreach (var account in toAccounts)
+        {
+            ToAccountOptions.Add(account);
+        }
+
+        if (SelectedFromAccount is null || !fromAccounts.Any(account => account.Id == SelectedFromAccount.Id))
+        {
+            SelectedFromAccount = fromAccounts.FirstOrDefault();
+        }
+
+        if (SelectedToAccount is null || !toAccounts.Any(account => account.Id == SelectedToAccount.Id))
+        {
+            SelectedToAccount = toAccounts.FirstOrDefault();
+        }
+    }
+
+    private bool IsFromAccountOption(AccountSummary account)
+    {
+        return account.IsActive && SelectedTransactionType switch
+        {
+            "Income" => account.AccountType == "Asset",
+            "Transfer" => IsBalanceSheetAccount(account),
+            _ => account.AccountType is "Asset" or "Liability"
+        };
+    }
+
+    private bool IsToAccountOption(AccountSummary account)
+    {
+        return account.IsActive && SelectedTransactionType switch
+        {
+            "Income" => account.AccountType == "Income",
+            "Transfer" => IsBalanceSheetAccount(account),
+            _ => account.AccountType == "Expense"
+        };
+    }
+
+    private static bool IsBalanceSheetAccount(AccountSummary account)
+    {
+        return account.AccountType is "Asset" or "Liability" or "Equity";
     }
 }

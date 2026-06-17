@@ -109,6 +109,85 @@ public sealed class TitusBooksApiClient
             cancellationToken);
     }
 
+    public async Task<JournalEntrySummary> PostExpenseAsync(
+        Guid organizationId,
+        PostExpenseCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsJsonAsync(
+            $"/organizations/{organizationId}/transactions/expenses",
+            command,
+            cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+
+        return await ReadRequiredJsonAsync<JournalEntrySummary>(
+            response,
+            "API returned an empty journal entry response.",
+            cancellationToken);
+    }
+
+    public async Task<JournalEntrySummary> PostIncomeAsync(
+        Guid organizationId,
+        PostIncomeCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsJsonAsync(
+            $"/organizations/{organizationId}/transactions/income",
+            command,
+            cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+
+        return await ReadRequiredJsonAsync<JournalEntrySummary>(
+            response,
+            "API returned an empty journal entry response.",
+            cancellationToken);
+    }
+
+    public async Task<JournalEntrySummary> PostTransferAsync(
+        Guid organizationId,
+        PostTransferCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsJsonAsync(
+            $"/organizations/{organizationId}/transactions/transfers",
+            command,
+            cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+
+        return await ReadRequiredJsonAsync<JournalEntrySummary>(
+            response,
+            "API returned an empty journal entry response.",
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<AccountRegisterEntrySummary>> ListRegisterAsync(
+        Guid organizationId,
+        Guid accountId,
+        DateOnly? startDate = null,
+        DateOnly? endDate = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new List<string>();
+        if (startDate is not null)
+        {
+            query.Add($"startDate={Uri.EscapeDataString(startDate.Value.ToString("O"))}");
+        }
+
+        if (endDate is not null)
+        {
+            query.Add($"endDate={Uri.EscapeDataString(endDate.Value.ToString("O"))}");
+        }
+
+        var path = $"/organizations/{organizationId}/accounts/{accountId}/register";
+        if (query.Count > 0)
+        {
+            path = $"{path}?{string.Join('&', query)}";
+        }
+
+        return await httpClient.GetFromJsonAsync<List<AccountRegisterEntrySummary>>(path, cancellationToken)
+            ?? [];
+    }
+
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         if (response.IsSuccessStatusCode)
