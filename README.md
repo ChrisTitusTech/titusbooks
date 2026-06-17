@@ -45,6 +45,19 @@ dotnet run --project src/FinancialApp.Desktop/FinancialApp.Desktop.csproj
 
 Local, non-secret desktop overrides may be placed in `src/FinancialApp.Desktop/appsettings.Local.json`. Desktop clients should store the API endpoint, not PostgreSQL credentials.
 
+Run the API locally:
+
+```bash
+dotnet run --project src/FinancialApp.Api/FinancialApp.Api.csproj --urls http://127.0.0.1:5000
+```
+
+Check API health:
+
+```bash
+curl http://127.0.0.1:5000/health
+curl http://127.0.0.1:5000/health/database
+```
+
 ## Database Migrations
 
 The migration CLI runs on the API/database host and accepts a PostgreSQL connection string from an argument or environment variable. Keep secrets out of committed config files.
@@ -76,6 +89,50 @@ dotnet run --project src/FinancialApp.Migrations/FinancialApp.Migrations.csproj
 ```
 
 The baseline migration creates organizations, accounts, import batches, imported transactions, journal entries, journal lines, categorization rules, and reconciliations.
+
+## Server Publish
+
+Publish the API for Linux x64:
+
+```bash
+dotnet publish src/FinancialApp.Api/FinancialApp.Api.csproj \
+  -c Release \
+  -r linux-x64 \
+  --self-contained false \
+  -o artifacts/publish/FinancialApp.Api
+```
+
+Copy the published files to the server:
+
+```bash
+rsync -av artifacts/publish/FinancialApp.Api/ titus@10.0.0.80:/opt/titusbooks/api/
+```
+
+The server-side systemd service should set:
+
+```text
+ASPNETCORE_URLS=http://10.0.0.80:5000
+TITUSBOOKS_CONNECTIONSTRING=Host=127.0.0.1;Port=5432;Database=titusbooks;Username=titus;Password=...;SSL Mode=Disable;Timeout=15;Command Timeout=120;Keepalive=30
+TITUSBOOKS_RUN_MIGRATIONS=false
+```
+
+Install the systemd service template:
+
+```bash
+sudo cp deploy/systemd/titusbooks-api.service /etc/systemd/system/titusbooks-api.service
+sudo systemctl daemon-reload
+sudo systemctl enable titusbooks-api
+sudo systemctl start titusbooks-api
+```
+
+Check service status and logs:
+
+```bash
+sudo systemctl status titusbooks-api
+sudo journalctl -u titusbooks-api -n 100 --no-pager
+```
+
+If `TITUSBOOKS_RUN_MIGRATIONS=true`, the API applies embedded migrations during startup. Keep it `false` if you prefer running migrations manually with `FinancialApp.Migrations`.
 
 ## Recommended First Prompt for Codex
 

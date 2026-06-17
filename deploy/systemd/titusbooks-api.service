@@ -1,0 +1,16 @@
+[Unit]
+Description=TitusBooks API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/titusbooks/api
+ExecStart=/usr/bin/dotnet /opt/titusbooks/api/FinancialApp.Api.dll
+EnvironmentFile=/etc/titusbooks/api.env
+Restart=always
+RestartSec=5
+User=titus
+Group=titus
+
+[Install]
+WantedBy=multi-user.target

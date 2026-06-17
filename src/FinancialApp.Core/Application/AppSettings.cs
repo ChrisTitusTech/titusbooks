@@ -6,5 +6,7 @@ public sealed record AppSettings
 
     public string EnvironmentName { get; init; } = "Development";
 
+    public ApiSettings Api { get; init; } = new();
+
     public DatabaseSettings Database { get; init; } = new();
 }

@@ -13,7 +13,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         Title = settings.ApplicationName;
         StatusMessage = "Phase 0 foundation is ready.";
-        DatabaseSummary = $"PostgreSQL target: {settings.Database.Host}:{settings.Database.Port}/{settings.Database.DatabaseName}";
+        DatabaseSummary = $"API target: {settings.Api.BaseUrl}";
     }
 
     public string Title { get; }
