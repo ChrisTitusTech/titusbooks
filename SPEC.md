@@ -1,6 +1,6 @@
 # SPEC.md
 
-# Project Specification: PostgreSQL-Backed Financial Desktop App
+# Project Specification: API-Backed Financial Desktop App
 
 ## 1. Product Summary
 
@@ -11,7 +11,8 @@ The app must support:
 - Manual expense and income entry.
 - Bank transaction import, starting with Bank of America CSV/QFX/OFX-style imports.
 - PayPal transaction import, starting with CSV exports.
-- PostgreSQL as the primary database.
+- ASP.NET Core API service as the desktop client's data boundary.
+- PostgreSQL as the primary database behind the API.
 - Categorization rules.
 - Transaction review/staging before posting to the ledger.
 - Double-entry accounting internally, with a simplified user-facing interface.
@@ -24,7 +25,7 @@ The first version should not attempt to fully clone QuickBooks. Avoid payroll, i
 
 ### 2.1 Local-first control
 
-Users should own their financial data. The primary database should be PostgreSQL, which may run locally, on a LAN server, or on a remote server controlled by the user.
+Users should own their financial data. The primary database should be PostgreSQL, accessed through an ASP.NET Core API that may run locally, on a LAN server, or on a VPN/remote server controlled by the user.
 
 ### 2.2 Simple UI, proper accounting model
 
@@ -43,7 +44,7 @@ Financial data must be traceable. The app should preserve raw import payloads wh
 The app should become useful quickly by focusing on core workflows:
 
 1. Set up company.
-2. Connect PostgreSQL.
+2. Connect to the TitusBooks API.
 3. Create chart of accounts.
 4. Enter manual income/expenses.
 5. Import Bank of America CSV.
@@ -64,6 +65,7 @@ Packaging may be deferred until after the MVP, but the app architecture should a
 ### 4.1 Required Stack
 
 - UI: Avalonia UI
+- API: ASP.NET Core
 - Language: C#
 - Runtime: .NET 10
 - Database: PostgreSQL
@@ -76,7 +78,37 @@ Packaging may be deferred until after the MVP, but the app architecture should a
 
 ### 4.2 Stack Constraint
 
-This project does not use alternate UI/runtime/database stacks for MVP planning or implementation. Keep all outlines and implementation work on Avalonia + .NET + PostgreSQL.
+This project does not use alternate UI/runtime/database stacks for MVP planning or implementation. Keep all outlines and implementation work on Avalonia + ASP.NET Core + .NET + PostgreSQL.
+
+### 4.3 Application Boundary
+
+The desktop app must not connect directly to PostgreSQL. It should communicate with the ASP.NET Core API over HTTP.
+
+The API owns:
+
+- PostgreSQL connection strings and credentials.
+- Database migrations.
+- Transaction boundaries.
+- Persistence repositories.
+- Request validation.
+- Enforcement of accounting invariants before writes.
+
+The desktop app owns:
+
+- Avalonia UI and view models.
+- User input collection.
+- API client configuration.
+- Displaying validation errors and results returned by the API.
+
+Recommended runtime topology:
+
+```text
+Avalonia Desktop Client
+↓
+ASP.NET Core API
+↓
+PostgreSQL
+```
 
 ## 5. Core Domain Model
 
@@ -561,8 +593,11 @@ Capabilities:
 ## 10. Security Requirements
 
 - Never store bank usernames or passwords.
-- Store PostgreSQL credentials using OS credential storage when possible.
-- Support PostgreSQL SSL configuration.
+- Store PostgreSQL credentials on the API host only, using environment variables, OS credential storage, or deployment secret storage where possible.
+- Desktop clients must not store PostgreSQL credentials.
+- Support PostgreSQL SSL configuration between the API and PostgreSQL.
+- Support API URL configuration in the desktop client.
+- Support TLS for API traffic when the API is exposed beyond localhost.
 - Keep sensitive tokens out of logs.
 - Sanitize exception messages shown to the user.
 - Encrypt local config files if they contain secrets.
@@ -608,7 +643,7 @@ Do not build in MVP:
 MVP is successful when a user can:
 
 1. Open the desktop app on at least one platform.
-2. Connect to PostgreSQL.
+2. Connect to the TitusBooks API.
 3. Create an organization.
 4. Use a default chart of accounts.
 5. Manually enter income and expenses.

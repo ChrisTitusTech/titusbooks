@@ -12,7 +12,7 @@ Create a clean, testable project foundation without implementing business featur
 
 ### Tasks
 
-- Confirm locked foundation stack: Avalonia UI + C#/.NET 10 + PostgreSQL.
+- Confirm locked foundation stack: Avalonia UI + ASP.NET Core API + C#/.NET 10 + PostgreSQL.
 - Create solution/project structure.
 - Add formatting/linting configuration.
 - Add test project.
@@ -27,11 +27,14 @@ Create a clean, testable project foundation without implementing business featur
 FinancialApp/
 ├── src/
 │   ├── FinancialApp.Desktop/
+│   ├── FinancialApp.Api/
 │   ├── FinancialApp.Core/
 │   ├── FinancialApp.Data/
 │   ├── FinancialApp.Importers/
-│   └── FinancialApp.Reports/
+│   ├── FinancialApp.Reports/
+│   └── FinancialApp.Migrations/
 ├── tests/
+│   ├── FinancialApp.Api.Tests/
 │   ├── FinancialApp.Core.Tests/
 │   ├── FinancialApp.Importers.Tests/
 │   └── FinancialApp.Reports.Tests/
@@ -47,15 +50,17 @@ FinancialApp/
 - Desktop app opens a placeholder window.
 - No database connection required yet.
 
-## Phase 1: Database and Domain Foundation
+## Phase 1: API, Database, and Domain Foundation
 
 ### Goal
 
-Implement the core database schema and accounting domain model.
+Implement the API host, core database schema, and accounting domain model.
 
 ### Tasks
 
-- Add PostgreSQL connection configuration.
+- Add ASP.NET Core API project.
+- Add API health endpoint.
+- Add API-side PostgreSQL connection configuration.
 - Add database migration runner.
 - Create migrations for:
   - organizations
@@ -70,11 +75,13 @@ Implement the core database schema and accounting domain model.
 - Add repositories or data access services.
 - Add seed/default chart of accounts.
 - Add accounting service that posts balanced journal entries.
+- Add desktop configuration for API base URL instead of direct PostgreSQL connection.
 
 ### Acceptance Criteria
 
-- App can connect to PostgreSQL.
-- Migrations can be applied from the app or CLI.
+- API can connect to PostgreSQL.
+- Desktop app can connect to API health endpoint.
+- Migrations can be applied from the API host or CLI.
 - Tests verify journal entries cannot be posted if unbalanced.
 - Tests verify default chart of accounts can be created.
 
@@ -97,7 +104,7 @@ Let the user create an organization and manage chart of accounts.
 - User can create an organization.
 - User can seed default accounts.
 - User can create and deactivate accounts.
-- App reloads organization/accounts after restart.
+- App reloads organization/accounts from the API after restart.
 
 ## Phase 3: Manual Transactions
 
@@ -280,18 +287,21 @@ Harden the app before external API integrations.
 
 ### Tasks
 
-- Store PostgreSQL credentials in OS credential store.
+- Store PostgreSQL credentials only on the API host using environment variables, OS credential storage, or deployment secret storage.
+- Ensure desktop clients store API URL/configuration only, not database credentials.
 - Mask sensitive data in logs.
-- Add SSL connection options for PostgreSQL.
+- Add SSL connection options for PostgreSQL from the API host.
+- Add HTTP/TLS configuration for API access.
 - Add secure settings screen.
 - Add error handling strategy.
 - Add backup/export guidance.
 
 ### Acceptance Criteria
 
-- Connection secrets are not stored in plaintext app config.
+- Connection secrets are not stored in plaintext desktop app config.
 - Logs do not contain passwords or tokens.
-- User can configure SSL mode.
+- API deployment can configure PostgreSQL SSL mode.
+- User can configure API endpoint.
 
 ## Phase 11: API Integrations Later
 
@@ -325,13 +335,13 @@ Prepare app for real use.
 - macOS app bundle.
 - Linux AppImage/Flatpak/deb/rpm as appropriate.
 - App update strategy.
-- PostgreSQL setup documentation.
+- API and PostgreSQL setup documentation.
 - Backup/restore documentation.
 
 ### Acceptance Criteria
 
 - App can be installed and launched on target OS.
-- User can configure PostgreSQL connection.
+- User can configure API connection.
 - User can back up and restore the database using documented steps.
 
 ## Phase 13: Deferred Advanced Features

@@ -1,8 +1,8 @@
 # TitusBooks
 
-TitusBooks is a multi-platform bookkeeping desktop app on an Avalonia + .NET 10 + PostgreSQL foundation.
+TitusBooks is a multi-platform bookkeeping desktop app on an Avalonia + ASP.NET Core + .NET 10 + PostgreSQL foundation.
 
-The current implementation is in Phase 1 of the roadmap: database and domain foundation. It includes the solution structure, placeholder desktop shell, configuration model, logging setup, PostgreSQL migrations, core accounting models, default chart of accounts seeding, and balanced journal-entry enforcement.
+The current implementation is in Phase 1 of the roadmap: API, database, and domain foundation. It includes the solution structure, placeholder desktop shell, configuration model, logging setup, PostgreSQL migrations, core accounting models, default chart of accounts seeding, and balanced journal-entry enforcement.
 
 ## Files
 
@@ -11,6 +11,7 @@ The current implementation is in Phase 1 of the roadmap: database and domain fou
 - `AGENTS.md` - Codex agent operating instructions and task decomposition rules.
 - `SKILLS.md` - Domain and technical skills Codex should apply while working on the project.
 - `src/FinancialApp.Desktop` - Avalonia desktop application.
+- `src/FinancialApp.Api` - ASP.NET Core API service.
 - `src/FinancialApp.Core` - Domain and application models.
 - `src/FinancialApp.Data` - PostgreSQL data access and embedded migrations.
 - `src/FinancialApp.Migrations` - CLI for applying PostgreSQL migrations.
@@ -42,11 +43,11 @@ Run the placeholder desktop app:
 dotnet run --project src/FinancialApp.Desktop/FinancialApp.Desktop.csproj
 ```
 
-Local, non-secret overrides may be placed in `src/FinancialApp.Desktop/appsettings.Local.json`. Do not commit database passwords or tokens.
+Local, non-secret desktop overrides may be placed in `src/FinancialApp.Desktop/appsettings.Local.json`. Desktop clients should store the API endpoint, not PostgreSQL credentials.
 
 ## Database Migrations
 
-The migration CLI accepts a PostgreSQL connection string from an argument or environment variable. Keep secrets out of committed config files.
+The migration CLI runs on the API/database host and accepts a PostgreSQL connection string from an argument or environment variable. Keep secrets out of committed config files.
 
 Preferred local setup:
 
@@ -85,6 +86,7 @@ Read AGENTS.md, SPEC.md, ROADMAP.md, and SKILLS.md. Then inspect the repository 
 ## Foundation Stack (Locked)
 
 - Desktop UI: Avalonia UI
+- API: ASP.NET Core
 - Language/runtime: .NET 10
 - Database: PostgreSQL
 - Data access: Npgsql + Dapper

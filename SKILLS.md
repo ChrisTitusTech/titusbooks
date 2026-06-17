@@ -78,7 +78,26 @@ Useful PostgreSQL concepts:
 - unique constraints for deduplication.
 - check constraints for debit/credit line validity.
 
-## 3. Desktop Application Skill
+PostgreSQL access belongs behind the ASP.NET Core API. Desktop UI code should not open PostgreSQL connections or store database credentials.
+
+## 3. ASP.NET Core API Skill
+
+Use ASP.NET Core as the stable service boundary between Avalonia desktop clients and PostgreSQL.
+
+Requirements:
+
+- Keep endpoints thin.
+- Put accounting rules in core/domain services.
+- Put PostgreSQL access in data repositories.
+- Use request/response DTOs rather than exposing database rows directly.
+- Validate inputs before calling domain services.
+- Use transactions for writes that create journal entries.
+- Return actionable validation errors.
+- Do not log secrets, raw passwords, or full connection strings.
+- Provide a health endpoint for desktop connectivity checks.
+- Keep API contracts stable within each roadmap phase.
+
+## 4. Desktop Application Skill
 
 Build a practical cross-platform business app.
 
@@ -86,10 +105,12 @@ Build a practical cross-platform business app.
 - Keep ViewModels separate from domain services.
 - Use MVVM patterns.
 - Avoid putting accounting logic in code-behind.
+- Do not connect directly to PostgreSQL from the desktop app.
+- Use typed API client services for server communication.
 - Use observable collections and commands cleanly.
 - Keep forms validation explicit.
 
-## 4. Importer Design Skill
+## 5. Importer Design Skill
 
 Build importers in layers:
 
@@ -113,7 +134,7 @@ CSV import must support:
 - Row-level errors.
 - Import summary.
 
-## 5. Bank Import Skill
+## 6. Bank Import Skill
 
 Bank of America CSV formats may vary. Do not hardcode too narrowly.
 
@@ -133,7 +154,7 @@ Deduplicate when transaction IDs are unavailable by using a fingerprint:
 source + account + date + amount + normalized description
 ```
 
-## 6. PayPal Import Skill
+## 7. PayPal Import Skill
 
 PayPal imports are not simple bank statement imports.
 
@@ -165,7 +186,7 @@ Debit:  Merchant Fees for fee
 Credit: Sales Income for gross
 ```
 
-## 7. Reporting Skill
+## 8. Reporting Skill
 
 Reports should derive from posted journal entries, not imported staging rows.
 
@@ -191,7 +212,7 @@ Reports need:
 - organization id
 - export to CSV
 
-## 8. Reconciliation Skill
+## 9. Reconciliation Skill
 
 Reconciliation compares the ledger to an external bank statement.
 
@@ -206,7 +227,7 @@ Workflow:
 
 Protect reconciled transactions from destructive edits.
 
-## 9. Security Skill
+## 10. Security Skill
 
 Financial data requires careful handling.
 
@@ -214,12 +235,15 @@ Rules:
 
 - Do not store bank credentials.
 - Do not log passwords, tokens, or full secrets.
-- Use OS credential storage for PostgreSQL credentials where available.
-- Support PostgreSQL SSL.
+- Keep PostgreSQL credentials on the API host only.
+- Do not store PostgreSQL credentials in the desktop app.
+- Use OS credential storage or deployment secret storage for API-host database credentials where available.
+- Support PostgreSQL SSL between API and database where available.
+- Support HTTP/TLS configuration between desktop clients and the API.
 - Keep raw import data but avoid dumping it in logs.
 - Avoid telemetry by default.
 
-## 10. Testing Skill
+## 11. Testing Skill
 
 Prioritize tests around financial correctness.
 
@@ -239,7 +263,7 @@ Tests should cover:
 
 Use fake data only.
 
-## 11. Refactoring Skill
+## 12. Refactoring Skill
 
 Refactor only when it improves correctness or maintainability.
 
@@ -252,20 +276,21 @@ Before refactoring:
 - Refactor.
 - Verify tests still pass.
 
-## 12. Documentation Skill
+## 13. Documentation Skill
 
 Update documentation when behavior changes.
 
 Maintain docs for:
 
 - Local development.
-- PostgreSQL setup.
+- API setup.
+- PostgreSQL setup behind the API.
 - Database migrations.
 - Import file formats.
 - Accounting assumptions.
 - Backup/restore.
 
-## 13. Codex Prompting Skill
+## 14. Codex Prompting Skill
 
 Good task prompt:
 

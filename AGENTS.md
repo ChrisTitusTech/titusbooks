@@ -2,9 +2,9 @@
 
 # Codex Agent Instructions
 
-You are building a multi-platform desktop bookkeeping application backed by PostgreSQL. The product is a simplified QuickBooks-style app focused on manual expenses, Bank of America transaction imports, PayPal imports, categorization, reconciliation, and basic financial reports.
+You are building a multi-platform desktop bookkeeping application backed by an ASP.NET Core API and PostgreSQL. The product is a simplified QuickBooks-style app focused on manual expenses, Bank of America transaction imports, PayPal imports, categorization, reconciliation, and basic financial reports.
 
-The implementation foundation is locked to Avalonia UI + C#/.NET + PostgreSQL for MVP and roadmap execution. Do not introduce alternate stacks unless explicitly requested.
+The implementation foundation is locked to Avalonia UI + ASP.NET Core API + C#/.NET + PostgreSQL for MVP and roadmap execution. Do not introduce alternate stacks unless explicitly requested.
 
 Before writing code, read:
 
@@ -58,11 +58,31 @@ Do not introduce these unless explicitly requested.
 
 ## 4. Architecture Rules
 
+### 4.0 Keep PostgreSQL behind the API
+
+The Avalonia desktop app must not connect directly to PostgreSQL.
+
+Correct runtime boundary:
+
+```text
+Avalonia Desktop Client
+↓ HTTP API
+ASP.NET Core API
+↓ Npgsql/Dapper
+PostgreSQL
+```
+
+The ASP.NET Core API owns PostgreSQL connectivity, migrations, request validation, transaction boundaries, and persistence. The desktop client talks to the API through typed client services and should store only the API base URL and user-facing preferences locally.
+
+For local development, the API may run on the same machine as the desktop app. For LAN/VPN use, clients should connect to the API service instead of exposing PostgreSQL directly to every desktop client.
+
 ### 4.1 Keep financial logic out of the UI
 
 UI code may collect inputs and display results, but it must not contain accounting rules.
 
 Put accounting logic in a core/domain service layer.
+
+The API layer may orchestrate domain services and persistence, but it should not bury accounting rules in controllers or endpoints.
 
 ### 4.2 Keep import parsing separate from posting
 
@@ -131,8 +151,10 @@ Use fake data only. Do not include real bank or PayPal data in fixtures.
 - Never store bank usernames or passwords.
 - Never log secrets.
 - Never concatenate user input into SQL.
-- Store database credentials in OS credential storage where possible.
-- Support PostgreSQL SSL configuration.
+- Store database credentials only on the API host, using environment variables, OS credential storage, or deployment-appropriate secret storage.
+- Desktop clients must not store PostgreSQL credentials.
+- Support PostgreSQL SSL configuration between the API and PostgreSQL where available.
+- Support HTTP/TLS configuration between desktop clients and the API for LAN/VPN deployments.
 - Keep OAuth/API token support isolated for a later phase.
 
 ## 8. UI Rules
@@ -190,7 +212,7 @@ Financial software must fail safely.
 Use prompts like:
 
 ```text
-Read AGENTS.md, SPEC.md, ROADMAP.md, and SKILLS.md. Implement Phase 1 database migrations and the accounting domain entities only. Do not implement UI screens. Add tests for balanced journal entries and default chart of accounts seeding. Run the build and tests.
+Read AGENTS.md, SPEC.md, ROADMAP.md, and SKILLS.md. Implement Phase 1 API/database migrations and the accounting domain entities only. Do not implement UI screens. Add tests for balanced journal entries and default chart of accounts seeding. Run the build and tests.
 ```
 
 Another example:
