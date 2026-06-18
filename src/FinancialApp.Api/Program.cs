@@ -2,9 +2,11 @@ using FinancialApp.Api.Endpoints;
 using FinancialApp.Api.Health;
 using FinancialApp.Api.Startup;
 using FinancialApp.Core.Accounting;
+using FinancialApp.Core.Imports;
 using FinancialApp.Core.Organizations;
 using FinancialApp.Data.Database;
 using FinancialApp.Data.Repositories;
+using FinancialApp.Importers;
 using FinancialApp.Reports;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,10 +21,13 @@ if (!string.IsNullOrWhiteSpace(postgresConnectionString))
     builder.Services.AddScoped<IOrganizationRepository, PostgresOrganizationRepository>();
     builder.Services.AddScoped<IAccountRepository, PostgresAccountRepository>();
     builder.Services.AddScoped<IJournalEntryRepository, PostgresJournalEntryRepository>();
+    builder.Services.AddScoped<IImportRepository, PostgresImportRepository>();
     builder.Services.AddScoped<IFinancialReportRepository, PostgresFinancialReportRepository>();
     builder.Services.AddScoped<DefaultChartOfAccountsSeeder>();
     builder.Services.AddScoped<AccountingService>();
     builder.Services.AddScoped<FinancialReportService>();
+    builder.Services.AddScoped<GenericCsvParser>();
+    builder.Services.AddScoped<CsvImportService>();
 }
 
 var app = builder.Build();
@@ -36,6 +41,7 @@ app.MapOrganizationEndpoints();
 app.MapAccountEndpoints();
 app.MapTransactionEndpoints();
 app.MapReportEndpoints();
+app.MapImportEndpoints();
 
 app.Run();
 

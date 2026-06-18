@@ -2,7 +2,7 @@
 
 TitusBooks is a multi-platform bookkeeping desktop app on an Avalonia + ASP.NET Core + .NET 10 + PostgreSQL foundation.
 
-Phases 0 through 4 of the roadmap are implemented. TitusBooks currently supports organization and account setup, manual expense/income/transfer posting, account registers, Profit and Loss, Expense by Category, Income by Source, date-range filtering, and CSV report export.
+Phases 0 through 5 of the roadmap are implemented locally. TitusBooks currently supports organization and account setup, manual expense/income/transfer posting, account registers, financial reports, CSV report export, and generic CSV transaction staging with column mapping and duplicate detection.
 
 ## Files
 
@@ -15,7 +15,7 @@ Phases 0 through 4 of the roadmap are implemented. TitusBooks currently supports
 - `src/FinancialApp.Core` - Domain and application models.
 - `src/FinancialApp.Data` - PostgreSQL data access and embedded migrations.
 - `src/FinancialApp.Migrations` - CLI for applying PostgreSQL migrations.
-- `src/FinancialApp.Importers` - Future CSV and provider importers.
+- `src/FinancialApp.Importers` - Generic CSV parsing, normalization, fingerprinting, and staging services.
 - `src/FinancialApp.Reports` - Financial report calculations and CSV export.
 - `tests` - xUnit test projects.
 
@@ -66,6 +66,17 @@ GET /organizations/{organizationId}/reports/expenses-by-category
 GET /organizations/{organizationId}/reports/income-by-source
 GET /organizations/{organizationId}/reports/{reportName}/csv
 ```
+
+Generic CSV import endpoints:
+
+```text
+POST /imports/csv/headers
+POST /organizations/{organizationId}/imports/csv/preview
+POST /organizations/{organizationId}/imports/csv
+GET  /organizations/{organizationId}/imports/transactions
+```
+
+CSV imports remain in staging and never post journal entries automatically.
 
 ## Database Migrations
 

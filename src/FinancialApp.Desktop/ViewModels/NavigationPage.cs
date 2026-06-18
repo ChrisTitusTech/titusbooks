@@ -6,5 +6,6 @@ public enum NavigationPage
     Setup,
     Accounts,
     Transactions,
+    Imports,
     Reports
 }

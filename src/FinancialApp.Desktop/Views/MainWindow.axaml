@@ -94,8 +94,10 @@
                             Command="{Binding NavigateCommand}"
                             CommandParameter="Reports"/>
                     <Button Classes="nav"
+                            Classes.active="{Binding IsImportsPage}"
                             Content="Imports"
-                            IsEnabled="False"/>
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="Imports"/>
 
                     <Border Height="1"
                             Margin="18,12"
@@ -208,6 +210,7 @@
                 <views:SetupView IsVisible="{Binding IsSetupPage}"/>
                 <views:AccountsView IsVisible="{Binding IsAccountsPage}"/>
                 <views:TransactionsView IsVisible="{Binding IsTransactionsPage}"/>
+                <views:ImportsView IsVisible="{Binding IsImportsPage}"/>
                 <views:ReportsView IsVisible="{Binding IsReportsPage}"/>
             </Grid>
         </Grid>

@@ -1,0 +1,294 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:FinancialApp.Desktop.ViewModels"
+             xmlns:api="using:FinancialApp.Core.Api"
+             x:Class="FinancialApp.Desktop.Views.ImportsView"
+             x:DataType="vm:MainWindowViewModel">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <Grid Margin="28,0,28,32"
+              RowDefinitions="Auto,Auto,Auto,*"
+              RowSpacing="16"
+              MinHeight="560">
+            <Grid ColumnDefinitions="*,180,Auto"
+                  ColumnSpacing="10">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="CSV file"
+                               FontSize="12"
+                               Foreground="#475569"/>
+                    <Border MinHeight="40"
+                            Padding="12,8"
+                            Background="White"
+                            BorderBrush="#B9C6D3"
+                            BorderThickness="1">
+                        <TextBlock Text="{Binding ImportFileName, FallbackValue='No file selected'}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="#334155"/>
+                    </Border>
+                </StackPanel>
+                <StackPanel Grid.Column="1"
+                            Spacing="4">
+                    <TextBlock Text="Source name"
+                               FontSize="12"
+                               Foreground="#475569"/>
+                    <TextBox MinHeight="40"
+                             Text="{Binding ImportSource}"
+                             Background="White"
+                             Foreground="#111827"
+                             BorderBrush="#94A3B8"/>
+                </StackPanel>
+                <Button Grid.Column="2"
+                        MinHeight="40"
+                        MinWidth="120"
+                        Margin="0,20,0,0"
+                        Command="{Binding ChooseImportFileCommand}"
+                        Content="Choose CSV"
+                        Background="#078CB5"
+                        Foreground="White"/>
+            </Grid>
+
+            <Border Grid.Row="1"
+                    Padding="16"
+                    Background="White"
+                    BorderBrush="#DCE2E9"
+                    BorderThickness="1">
+                <Grid RowDefinitions="Auto,Auto"
+                      RowSpacing="12">
+                    <TextBlock Text="Column mapping"
+                               FontSize="17"
+                               FontWeight="SemiBold"
+                               Foreground="#172033"/>
+                    <Grid Grid.Row="1"
+                          ColumnDefinitions="*,*,*,*"
+                          ColumnSpacing="10">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Date"
+                                       FontSize="11"
+                                       Foreground="#64748B"/>
+                            <ComboBox MinHeight="38"
+                                      ItemsSource="{Binding CsvHeaders}"
+                                      SelectedItem="{Binding SelectedDateColumn}"
+                                      Background="White"
+                                      Foreground="#111827"
+                                      BorderBrush="#94A3B8"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1"
+                                    Spacing="4">
+                            <TextBlock Text="Description"
+                                       FontSize="11"
+                                       Foreground="#64748B"/>
+                            <ComboBox MinHeight="38"
+                                      ItemsSource="{Binding CsvHeaders}"
+                                      SelectedItem="{Binding SelectedDescriptionColumn}"
+                                      Background="White"
+                                      Foreground="#111827"
+                                      BorderBrush="#94A3B8"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2"
+                                    Spacing="4">
+                            <TextBlock Text="Signed amount"
+                                       FontSize="11"
+                                       Foreground="#64748B"/>
+                            <ComboBox MinHeight="38"
+                                      ItemsSource="{Binding CsvHeaders}"
+                                      SelectedItem="{Binding SelectedAmountColumn}"
+                                      Background="White"
+                                      Foreground="#111827"
+                                      BorderBrush="#94A3B8"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="3"
+                                    Spacing="4">
+                            <TextBlock Text="Currency"
+                                       FontSize="11"
+                                       Foreground="#64748B"/>
+                            <ComboBox MinHeight="38"
+                                      ItemsSource="{Binding CsvHeaders}"
+                                      SelectedItem="{Binding SelectedCurrencyColumn}"
+                                      Background="White"
+                                      Foreground="#111827"
+                                      BorderBrush="#94A3B8"/>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="2"
+                  ColumnDefinitions="*,*,*,*,Auto,Auto"
+                  ColumnSpacing="10">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Debit"
+                               FontSize="11"
+                               Foreground="#64748B"/>
+                    <ComboBox MinHeight="38"
+                              ItemsSource="{Binding CsvHeaders}"
+                              SelectedItem="{Binding SelectedDebitColumn}"
+                              Background="White"
+                              Foreground="#111827"
+                              BorderBrush="#94A3B8"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1"
+                            Spacing="4">
+                    <TextBlock Text="Credit"
+                               FontSize="11"
+                               Foreground="#64748B"/>
+                    <ComboBox MinHeight="38"
+                              ItemsSource="{Binding CsvHeaders}"
+                              SelectedItem="{Binding SelectedCreditColumn}"
+                              Background="White"
+                              Foreground="#111827"
+                              BorderBrush="#94A3B8"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2"
+                            Spacing="4">
+                    <TextBlock Text="Transaction ID"
+                               FontSize="11"
+                               Foreground="#64748B"/>
+                    <ComboBox MinHeight="38"
+                              ItemsSource="{Binding CsvHeaders}"
+                              SelectedItem="{Binding SelectedSourceIdColumn}"
+                              Background="White"
+                              Foreground="#111827"
+                              BorderBrush="#94A3B8"/>
+                </StackPanel>
+                <StackPanel Grid.Column="3"
+                            Spacing="4">
+                    <TextBlock Text="Default currency"
+                               FontSize="11"
+                               Foreground="#64748B"/>
+                    <TextBox MinHeight="38"
+                             MaxLength="3"
+                             Text="{Binding DefaultImportCurrency}"
+                             Background="White"
+                             Foreground="#111827"
+                             BorderBrush="#94A3B8"/>
+                </StackPanel>
+                <Button Grid.Column="4"
+                        MinHeight="38"
+                        MinWidth="100"
+                        Margin="0,18,0,0"
+                        Command="{Binding PreviewImportCommand}"
+                        Content="Preview"
+                        Background="White"
+                        Foreground="#172033"
+                        BorderBrush="#94A3B8"/>
+                <Button Grid.Column="5"
+                        MinHeight="38"
+                        MinWidth="100"
+                        Margin="0,18,0,0"
+                        Command="{Binding ImportCsvCommand}"
+                        Content="Import"
+                        Background="#078CB5"
+                        Foreground="White"/>
+            </Grid>
+
+            <Grid Grid.Row="3"
+                  ColumnDefinitions="*,*"
+                  ColumnSpacing="18">
+                <Grid RowDefinitions="Auto,38,*"
+                      RowSpacing="8">
+                    <Grid ColumnDefinitions="*,Auto,Auto"
+                          ColumnSpacing="12">
+                        <TextBlock Text="Preview"
+                                   FontSize="17"
+                                   FontWeight="SemiBold"
+                                   Foreground="#172033"/>
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding ImportValidCount, StringFormat='{}{0} valid'}"
+                                   Foreground="#176B45"/>
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding ImportErrorCount, StringFormat='{}{0} errors'}"
+                                   Foreground="#9A3F3F"/>
+                    </Grid>
+                    <Border Grid.Row="1"
+                            Background="#E9EEF5"
+                            BorderBrush="#CBD5E1"
+                            BorderThickness="1">
+                        <Grid Margin="8,0"
+                              ColumnDefinitions="52,90,*,90"
+                              ColumnSpacing="8">
+                            <TextBlock Text="Row" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                            <TextBlock Grid.Column="1" Text="Date" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                            <TextBlock Grid.Column="2" Text="Description / error" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                            <TextBlock Grid.Column="3" Text="Amount" HorizontalAlignment="Right" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                        </Grid>
+                    </Border>
+                    <ListBox Grid.Row="2"
+                             MinHeight="260"
+                             Background="White"
+                             BorderBrush="#CBD5E1"
+                             ItemsSource="{Binding ImportPreviewRows}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="api:CsvImportPreviewRowSummary">
+                                <Grid Margin="8,7"
+                                      ColumnDefinitions="52,90,*,90"
+                                      ColumnSpacing="8">
+                                    <TextBlock Text="{Binding RowNumber}" Foreground="#475569"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding PostedDate}" Foreground="#334155"/>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="{Binding Description}" TextTrimming="CharacterEllipsis" Foreground="#172033"/>
+                                        <TextBlock Text="{Binding Error}" TextWrapping="Wrap" FontSize="11" Foreground="#9A3F3F"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="3"
+                                               Text="{Binding Amount, StringFormat='{}{0:C}'}"
+                                               HorizontalAlignment="Right"
+                                               Foreground="#334155"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+
+                <Grid Grid.Column="1"
+                      RowDefinitions="Auto,38,*"
+                      RowSpacing="8">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Staging"
+                                   FontSize="17"
+                                   FontWeight="SemiBold"
+                                   Foreground="#172033"/>
+                        <Button Grid.Column="1"
+                                Command="{Binding LoadImportedTransactionsCommand}"
+                                Content="Refresh"
+                                Background="Transparent"
+                                Foreground="#087EA4"
+                                BorderThickness="0"/>
+                    </Grid>
+                    <Border Grid.Row="1"
+                            Background="#E9EEF5"
+                            BorderBrush="#CBD5E1"
+                            BorderThickness="1">
+                        <Grid Margin="8,0"
+                              ColumnDefinitions="90,*,90,80"
+                              ColumnSpacing="8">
+                            <TextBlock Text="Date" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                            <TextBlock Grid.Column="1" Text="Description" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                            <TextBlock Grid.Column="2" Text="Amount" HorizontalAlignment="Right" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                            <TextBlock Grid.Column="3" Text="Status" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                        </Grid>
+                    </Border>
+                    <ListBox Grid.Row="2"
+                             MinHeight="260"
+                             Background="White"
+                             BorderBrush="#CBD5E1"
+                             ItemsSource="{Binding ImportedTransactions}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="api:ImportedTransactionSummary">
+                                <Grid Margin="8,7"
+                                      ColumnDefinitions="90,*,90,80"
+                                      ColumnSpacing="8">
+                                    <TextBlock Text="{Binding PostedDate}" Foreground="#334155"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Description}" TextTrimming="CharacterEllipsis" Foreground="#172033"/>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding Amount, StringFormat='{}{0:C}'}"
+                                               HorizontalAlignment="Right"
+                                               Foreground="#334155"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding Status}" Foreground="#475569"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\FinancialApp.Core\FinancialApp.Core.csproj" />
     <ProjectReference Include="..\FinancialApp.Data\FinancialApp.Data.csproj" />
+    <ProjectReference Include="..\FinancialApp.Importers\FinancialApp.Importers.csproj" />
     <ProjectReference Include="..\FinancialApp.Reports\FinancialApp.Reports.csproj" />
   </ItemGroup>
 

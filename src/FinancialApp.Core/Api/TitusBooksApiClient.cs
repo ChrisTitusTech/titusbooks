@@ -237,6 +237,62 @@ public sealed class TitusBooksApiClient
         return await response.Content.ReadAsStringAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<string>> ReadCsvHeadersAsync(
+        string csvContent,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsJsonAsync(
+            "/imports/csv/headers",
+            new { CsvContent = csvContent },
+            cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await ReadRequiredJsonAsync<List<string>>(
+            response,
+            "API returned an empty CSV header response.",
+            cancellationToken);
+    }
+
+    public async Task<CsvImportPreviewSummary> PreviewCsvImportAsync(
+        Guid organizationId,
+        CsvImportCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsJsonAsync(
+            $"/organizations/{organizationId}/imports/csv/preview",
+            command,
+            cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await ReadRequiredJsonAsync<CsvImportPreviewSummary>(
+            response,
+            "API returned an empty CSV preview response.",
+            cancellationToken);
+    }
+
+    public async Task<CsvImportResultSummary> ImportCsvAsync(
+        Guid organizationId,
+        CsvImportCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsJsonAsync(
+            $"/organizations/{organizationId}/imports/csv",
+            command,
+            cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await ReadRequiredJsonAsync<CsvImportResultSummary>(
+            response,
+            "API returned an empty CSV import response.",
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ImportedTransactionSummary>> ListImportedTransactionsAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<List<ImportedTransactionSummary>>(
+            $"/organizations/{organizationId}/imports/transactions",
+            cancellationToken) ?? [];
+    }
+
     private async Task<T> GetRequiredAsync<T>(
         string path,
         string emptyResponseMessage,

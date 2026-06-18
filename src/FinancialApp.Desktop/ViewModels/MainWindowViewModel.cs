@@ -96,8 +96,46 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private decimal dashboardNetIncome;
 
+    [ObservableProperty]
+    private string importSource = "Generic CSV";
+
+    [ObservableProperty]
+    private string? importFileName;
+
+    [ObservableProperty]
+    private string? selectedDateColumn;
+
+    [ObservableProperty]
+    private string? selectedDescriptionColumn;
+
+    [ObservableProperty]
+    private string? selectedAmountColumn;
+
+    [ObservableProperty]
+    private string? selectedDebitColumn;
+
+    [ObservableProperty]
+    private string? selectedCreditColumn;
+
+    [ObservableProperty]
+    private string? selectedSourceIdColumn;
+
+    [ObservableProperty]
+    private string? selectedCurrencyColumn;
+
+    [ObservableProperty]
+    private string defaultImportCurrency = "USD";
+
+    [ObservableProperty]
+    private int importValidCount;
+
+    [ObservableProperty]
+    private int importErrorCount;
+
     private readonly TitusBooksApiClient? apiClient;
     private readonly IReportFileSaver? reportFileSaver;
+    private readonly IImportFilePicker? importFilePicker;
+    private string? importCsvContent;
     private int accountLoadVersion;
 
     public MainWindowViewModel()
@@ -108,10 +146,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public MainWindowViewModel(
         AppSettings settings,
         TitusBooksApiClient? apiClient = null,
-        IReportFileSaver? reportFileSaver = null)
+        IReportFileSaver? reportFileSaver = null,
+        IImportFilePicker? importFilePicker = null)
     {
         this.apiClient = apiClient;
         this.reportFileSaver = reportFileSaver;
+        this.importFilePicker = importFilePicker;
         Title = settings.ApplicationName;
         DatabaseSummary = $"API target: {settings.Api.BaseUrl}";
     }
@@ -125,6 +165,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         NavigationPage.Home => SelectedOrganization?.Name ?? "Home",
         NavigationPage.Accounts => "Chart of accounts",
         NavigationPage.Transactions => "Transactions",
+        NavigationPage.Imports => "Import transactions",
         NavigationPage.Reports => "Reports",
         _ => "Company setup"
     };
@@ -134,6 +175,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         NavigationPage.Home => "Your books at a glance.",
         NavigationPage.Accounts => "Create and maintain the accounts used by your books.",
         NavigationPage.Transactions => "Record money in, money out, and transfers between accounts.",
+        NavigationPage.Imports => "Map a CSV file and review transactions before they enter staging.",
         NavigationPage.Reports => "Review financial performance for a selected date range.",
         _ => "Create a company and choose which set of books to work with."
     };
@@ -145,6 +187,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool IsAccountsPage => CurrentPage == NavigationPage.Accounts;
 
     public bool IsTransactionsPage => CurrentPage == NavigationPage.Transactions;
+
+    public bool IsImportsPage => CurrentPage == NavigationPage.Imports;
 
     public bool IsReportsPage => CurrentPage == NavigationPage.Reports;
 
@@ -175,6 +219,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<AccountRegisterEntrySummary> RegisterEntries { get; } = [];
 
     public ObservableCollection<ReportDisplayRow> ReportRows { get; } = [];
+
+    public ObservableCollection<string> CsvHeaders { get; } = [];
+
+    public ObservableCollection<CsvImportPreviewRowSummary> ImportPreviewRows { get; } = [];
+
+    public ObservableCollection<ImportedTransactionSummary> ImportedTransactions { get; } = [];
 
     public ObservableCollection<AccountReportTotalSummary> DashboardIncomeSources { get; } = [];
 
@@ -225,6 +275,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             if (targetPage == NavigationPage.Home)
             {
                 await LoadDashboardAsync();
+            }
+            else if (targetPage == NavigationPage.Imports)
+            {
+                await LoadImportedTransactionsAsync();
             }
         }
     }
@@ -667,6 +721,111 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
+    public async Task ChooseImportFileAsync()
+    {
+        if (apiClient is null || importFilePicker is null)
+        {
+            WorkspaceMessage = "CSV file selection is not available.";
+            return;
+        }
+
+        try
+        {
+            var file = await importFilePicker.PickCsvAsync();
+            if (file is null)
+            {
+                WorkspaceMessage = "CSV selection canceled.";
+                return;
+            }
+
+            var headers = await apiClient.ReadCsvHeadersAsync(file.Content);
+            importCsvContent = file.Content;
+            ImportFileName = file.FileName;
+            ReplaceCsvHeaders(headers);
+            ApplySuggestedMappings(headers);
+            ImportPreviewRows.Clear();
+            ImportValidCount = 0;
+            ImportErrorCount = 0;
+            WorkspaceMessage = $"Loaded {file.FileName}. Map the columns, then preview.";
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or IOException)
+        {
+            WorkspaceMessage = exception.Message;
+        }
+    }
+
+    [RelayCommand]
+    public async Task PreviewImportAsync()
+    {
+        if (!TryCreateImportCommand(out var organizationId, out var command))
+        {
+            return;
+        }
+
+        try
+        {
+            var preview = await apiClient!.PreviewCsvImportAsync(organizationId, command);
+            ImportPreviewRows.Clear();
+            foreach (var row in preview.Rows)
+            {
+                ImportPreviewRows.Add(row);
+            }
+
+            ImportValidCount = preview.ValidCount;
+            ImportErrorCount = preview.ErrorCount;
+            WorkspaceMessage = $"Preview ready: {preview.ValidCount} valid, {preview.ErrorCount} errors.";
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            WorkspaceMessage = exception.Message;
+        }
+    }
+
+    [RelayCommand]
+    public async Task ImportCsvAsync()
+    {
+        if (!TryCreateImportCommand(out var organizationId, out var command))
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await apiClient!.ImportCsvAsync(organizationId, command);
+            WorkspaceMessage =
+                $"Import complete: {result.PendingCount} pending, {result.DuplicateCount} duplicates, {result.ErrorCount} errors.";
+            await LoadImportedTransactionsAsync();
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            WorkspaceMessage = exception.Message;
+        }
+    }
+
+    [RelayCommand]
+    public async Task LoadImportedTransactionsAsync()
+    {
+        ImportedTransactions.Clear();
+        if (apiClient is null || SelectedOrganization is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var transactions = await apiClient.ListImportedTransactionsAsync(SelectedOrganization.Id);
+            foreach (var transaction in transactions)
+            {
+                ImportedTransactions.Add(transaction);
+            }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            WorkspaceMessage = exception.Message;
+        }
+    }
+
     partial void OnSelectedOrganizationChanged(OrganizationSummary? value)
     {
         OnPropertyChanged(nameof(PageTitle));
@@ -679,6 +838,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         _ = LoadAccountsForOrganizationAsync(value);
         _ = LoadDashboardAsync();
+        _ = LoadImportedTransactionsAsync();
     }
 
     partial void OnCurrentPageChanged(NavigationPage value)
@@ -689,6 +849,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsSetupPage));
         OnPropertyChanged(nameof(IsAccountsPage));
         OnPropertyChanged(nameof(IsTransactionsPage));
+        OnPropertyChanged(nameof(IsImportsPage));
         OnPropertyChanged(nameof(IsReportsPage));
     }
 
@@ -819,6 +980,103 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ReportPrimaryAmount = 0;
         ReportSecondaryAmount = 0;
         ReportResultAmount = 0;
+    }
+
+    private bool TryCreateImportCommand(
+        out Guid organizationId,
+        out CsvImportCommand command)
+    {
+        organizationId = SelectedOrganization?.Id ?? Guid.Empty;
+        command = null!;
+
+        if (apiClient is null || SelectedOrganization is null)
+        {
+            WorkspaceMessage = "Select a company first.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(importCsvContent) || string.IsNullOrWhiteSpace(ImportFileName))
+        {
+            WorkspaceMessage = "Choose a CSV file first.";
+            return false;
+        }
+
+        var dateColumn = NormalizeOptionalColumn(SelectedDateColumn);
+        var descriptionColumn = NormalizeOptionalColumn(SelectedDescriptionColumn);
+        if (dateColumn is null || descriptionColumn is null)
+        {
+            WorkspaceMessage = "Map the date and description columns.";
+            return false;
+        }
+
+        var amountColumn = NormalizeOptionalColumn(SelectedAmountColumn);
+        var debitColumn = NormalizeOptionalColumn(SelectedDebitColumn);
+        var creditColumn = NormalizeOptionalColumn(SelectedCreditColumn);
+        if (amountColumn is null && debitColumn is null && creditColumn is null)
+        {
+            WorkspaceMessage = "Map an amount column or debit/credit columns.";
+            return false;
+        }
+
+        if (amountColumn is not null && (debitColumn is not null || creditColumn is not null))
+        {
+            WorkspaceMessage = "Use either one amount column or debit/credit columns.";
+            return false;
+        }
+
+        command = new CsvImportCommand(
+            ImportSource.Trim(),
+            ImportFileName,
+            importCsvContent,
+            new CsvColumnMappingCommand(
+                dateColumn,
+                descriptionColumn,
+                amountColumn,
+                debitColumn,
+                creditColumn,
+                NormalizeOptionalColumn(SelectedSourceIdColumn),
+                NormalizeOptionalColumn(SelectedCurrencyColumn),
+                DefaultImportCurrency.Trim().ToUpperInvariant()));
+        return true;
+    }
+
+    private void ReplaceCsvHeaders(IEnumerable<string> headers)
+    {
+        CsvHeaders.Clear();
+        CsvHeaders.Add("(Not mapped)");
+        foreach (var header in headers)
+        {
+            CsvHeaders.Add(header);
+        }
+    }
+
+    private void ApplySuggestedMappings(IReadOnlyList<string> headers)
+    {
+        SelectedDateColumn = FindHeader(headers, "date", "posted");
+        SelectedDescriptionColumn = FindHeader(headers, "description", "memo", "name", "details");
+        SelectedAmountColumn = FindHeader(headers, "amount", "value") ?? "(Not mapped)";
+        SelectedDebitColumn = SelectedAmountColumn == "(Not mapped)"
+            ? FindHeader(headers, "debit", "withdrawal") ?? "(Not mapped)"
+            : "(Not mapped)";
+        SelectedCreditColumn = SelectedAmountColumn == "(Not mapped)"
+            ? FindHeader(headers, "credit", "deposit") ?? "(Not mapped)"
+            : "(Not mapped)";
+        SelectedSourceIdColumn = FindHeader(headers, "transaction id", "id", "reference") ?? "(Not mapped)";
+        SelectedCurrencyColumn = FindHeader(headers, "currency") ?? "(Not mapped)";
+    }
+
+    private static string? FindHeader(
+        IEnumerable<string> headers,
+        params string[] candidates)
+    {
+        return headers.FirstOrDefault(header =>
+            candidates.Any(candidate =>
+                header.Contains(candidate, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static string? NormalizeOptionalColumn(string? column)
+    {
+        return string.IsNullOrWhiteSpace(column) || column == "(Not mapped)" ? null : column;
     }
 
     private void RefreshTransactionAccountOptions()

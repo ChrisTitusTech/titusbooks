@@ -42,10 +42,12 @@ public partial class App : Application
             MainWindow? mainWindow = null;
             var apiHttpClient = CreateApiHttpClient(settings);
             var reportFileSaver = new AvaloniaReportFileSaver(() => mainWindow?.StorageProvider);
+            var importFilePicker = new AvaloniaImportFilePicker(() => mainWindow?.StorageProvider);
             var viewModel = new MainWindowViewModel(
                 settings,
                 new TitusBooksApiClient(apiHttpClient),
-                reportFileSaver);
+                reportFileSaver,
+                importFilePicker);
             _ = CheckApiHealthAsync(apiHttpClient, viewModel);
             _ = viewModel.InitializeAsync();
 

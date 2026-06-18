@@ -1,9 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using FinancialApp.Api.Accounting;
+using FinancialApp.Api.Imports;
 using FinancialApp.Api.Organizations;
 using FinancialApp.Core.Accounting;
+using FinancialApp.Core.Imports;
 using FinancialApp.Core.Organizations;
+using FinancialApp.Importers;
 using FinancialApp.Reports;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -354,6 +357,72 @@ public sealed class OrganizationEndpointTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Fact]
+    public async Task CsvImport_PreviewsImportsAndDetectsDuplicates()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = await CreateOrganizationAsync(client);
+        var request = new CsvImportApiRequest(
+            "Generic CSV",
+            "fake.csv",
+            """
+            Date,Description,Amount
+            2026-06-01,Office supplies,-42.00
+            invalid,Bad date,10.00
+            """,
+            new CsvColumnMappingRequest("Date", "Description", AmountColumn: "Amount"));
+
+        var previewResponse = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/imports/csv/preview",
+            request);
+        var preview = await previewResponse.Content.ReadFromJsonAsync<CsvImportPreviewResponse>();
+        var firstImportResponse = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/imports/csv",
+            request);
+        var firstImport = await firstImportResponse.Content.ReadFromJsonAsync<CsvImportResultResponse>();
+        var secondImportResponse = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/imports/csv",
+            request);
+        var secondImport = await secondImportResponse.Content.ReadFromJsonAsync<CsvImportResultResponse>();
+        var listResponse = await client.GetAsync(
+            $"/organizations/{organizationId}/imports/transactions");
+        var transactions = await listResponse.Content.ReadFromJsonAsync<List<ImportedTransactionResponse>>();
+
+        Assert.Equal(HttpStatusCode.OK, previewResponse.StatusCode);
+        Assert.NotNull(preview);
+        Assert.Equal(1, preview.ValidCount);
+        Assert.Equal(1, preview.ErrorCount);
+        Assert.Equal(HttpStatusCode.OK, firstImportResponse.StatusCode);
+        Assert.NotNull(firstImport);
+        Assert.Equal(1, firstImport.PendingCount);
+        Assert.Equal(0, firstImport.DuplicateCount);
+        Assert.NotNull(secondImport);
+        Assert.Equal(0, secondImport.PendingCount);
+        Assert.Equal(1, secondImport.DuplicateCount);
+        Assert.NotNull(transactions);
+        var transaction = Assert.Single(transactions);
+        Assert.Equal("pending", transaction.Status);
+        Assert.Equal(-42m, transaction.Amount);
+    }
+
+    [Fact]
+    public async Task CsvHeaders_ReturnsHeaderNames()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/imports/csv/headers",
+            new CsvHeadersRequest("Date,Description,Amount\n2026-06-01,Test,1.00"));
+        var headers = await response.Content.ReadFromJsonAsync<List<string>>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(["Date", "Description", "Amount"], headers);
+    }
+
     private static async Task<Guid> CreateOrganizationAsync(HttpClient client)
     {
         var response = await client.PostAsJsonAsync(
@@ -391,6 +460,9 @@ public sealed class OrganizationEndpointTests
                     services.RemoveAll<AccountingService>();
                     services.RemoveAll<IFinancialReportRepository>();
                     services.RemoveAll<FinancialReportService>();
+                    services.RemoveAll<IImportRepository>();
+                    services.RemoveAll<GenericCsvParser>();
+                    services.RemoveAll<CsvImportService>();
                     services.AddSingleton<IOrganizationRepository>(repositories);
                     services.AddSingleton<IAccountRepository>(repositories);
                     services.AddSingleton<IJournalEntryRepository>(repositories);
@@ -398,6 +470,9 @@ public sealed class OrganizationEndpointTests
                     services.AddSingleton<AccountingService>();
                     services.AddSingleton<IFinancialReportRepository>(repositories);
                     services.AddSingleton<FinancialReportService>();
+                    services.AddSingleton<IImportRepository>(repositories);
+                    services.AddSingleton<GenericCsvParser>();
+                    services.AddSingleton<CsvImportService>();
                 });
             });
     }
@@ -406,10 +481,12 @@ public sealed class OrganizationEndpointTests
         IOrganizationRepository,
         IAccountRepository,
         IJournalEntryRepository,
+        IImportRepository,
         IFinancialReportRepository
     {
         private readonly List<Account> accounts = [];
         private readonly List<JournalEntry> journalEntries = [];
+        private readonly List<ImportedTransaction> importedTransactions = [];
 
         public List<Organization> Organizations { get; } = [];
 
@@ -551,6 +628,41 @@ public sealed class OrganizationEndpointTests
                 .ToList();
 
             return Task.FromResult<IReadOnlyList<AccountReportTotal>>(totals);
+        }
+
+        public Task<IReadOnlySet<string>> FindExistingFingerprintsAsync(
+            Guid organizationId,
+            string source,
+            IReadOnlyCollection<string> fingerprints,
+            CancellationToken cancellationToken = default)
+        {
+            IReadOnlySet<string> existing = importedTransactions
+                .Where(transaction =>
+                    transaction.OrganizationId == organizationId
+                    && transaction.Source == source
+                    && fingerprints.Contains(transaction.Fingerprint))
+                .Select(transaction => transaction.Fingerprint)
+                .ToHashSet(StringComparer.Ordinal);
+            return Task.FromResult(existing);
+        }
+
+        public Task AddBatchAsync(
+            ImportBatch batch,
+            IReadOnlyCollection<ImportedTransaction> transactions,
+            CancellationToken cancellationToken = default)
+        {
+            importedTransactions.AddRange(transactions);
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<ImportedTransaction>> ListTransactionsAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<ImportedTransaction>>(
+                importedTransactions
+                    .Where(transaction => transaction.OrganizationId == organizationId)
+                    .ToList());
         }
     }
 }
