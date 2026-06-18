@@ -38,6 +38,16 @@ public sealed class GenericCsvParser
             try
             {
                 var fields = parser.ReadFields() ?? [];
+                if (fields.Length > headers.Length)
+                {
+                    rows.Add(new CsvImportRow(
+                        rowNumber,
+                        null,
+                        $"CSV row has {fields.Length} fields but the header defines {headers.Length}.",
+                        BuildRawValues(headers, fields)));
+                    continue;
+                }
+
                 var rawValues = BuildRawValues(headers, fields);
                 rows.Add(ParseRow(request, rowNumber, rawValues));
             }
@@ -156,6 +166,12 @@ public sealed class GenericCsvParser
 
         var debit = ParseOptionalDecimal(GetOptionalValue(rawValues, mapping.DebitColumn));
         var credit = ParseOptionalDecimal(GetOptionalValue(rawValues, mapping.CreditColumn));
+        if (debit != 0 && credit != 0)
+        {
+            throw new InvalidOperationException(
+                "A row cannot contain both debit and credit amounts.");
+        }
+
         if (debit == 0 && credit == 0)
         {
             throw new InvalidOperationException("Debit or credit amount is required.");

@@ -36,7 +36,6 @@ public sealed class CsvImportService
             .ToList();
         var existing = await repository.FindExistingFingerprintsAsync(
             request.OrganizationId,
-            request.Source,
             fingerprints,
             cancellationToken);
 

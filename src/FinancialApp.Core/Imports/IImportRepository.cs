@@ -4,7 +4,6 @@ public interface IImportRepository
 {
     Task<IReadOnlySet<string>> FindExistingFingerprintsAsync(
         Guid organizationId,
-        string source,
         IReadOnlyCollection<string> fingerprints,
         CancellationToken cancellationToken = default);
 

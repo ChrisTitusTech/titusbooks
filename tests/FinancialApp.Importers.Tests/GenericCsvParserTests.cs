@@ -57,6 +57,30 @@ public sealed class GenericCsvParserTests
     }
 
     [Fact]
+    public void Parse_DebitCreditColumns_RejectsRowsWithBothAmounts()
+    {
+        const string csv = """
+            Posted,Memo,Debit,Credit
+            2026-06-01,Ambiguous row,5.25,2.00
+            """;
+        var request = CreateRequest(
+            csv,
+            new CsvColumnMapping(
+                "Posted",
+                "Memo",
+                DebitColumn: "Debit",
+                CreditColumn: "Credit"));
+
+        var preview = new GenericCsvParser().Parse(request);
+
+        Assert.Equal(0, preview.ValidCount);
+        Assert.Equal(1, preview.ErrorCount);
+        Assert.Equal(
+            "A row cannot contain both debit and credit amounts.",
+            preview.Rows[0].Error);
+    }
+
+    [Fact]
     public void Parse_InvalidRow_ReturnsRowErrorWithoutFailingValidRows()
     {
         const string csv = """
@@ -119,6 +143,22 @@ public sealed class GenericCsvParserTests
             () => new GenericCsvParser().Parse(request));
 
         Assert.Equal("CSV header names cannot be empty.", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_ReportsRowsWithMoreFieldsThanHeaders()
+    {
+        var request = CreateRequest(
+            "Date,Description,Amount\n2026-06-01,Test,10.00,Unexpected",
+            new CsvColumnMapping("Date", "Description", AmountColumn: "Amount"));
+
+        var preview = new GenericCsvParser().Parse(request);
+
+        Assert.Equal(0, preview.ValidCount);
+        Assert.Equal(1, preview.ErrorCount);
+        Assert.Equal(
+            "CSV row has 4 fields but the header defines 3.",
+            preview.Rows[0].Error);
     }
 
     [Fact]

@@ -88,6 +88,29 @@ public sealed class CsvImportServiceTests
         Assert.Empty(repository.Transactions);
     }
 
+    [Fact]
+    public async Task ImportAsync_DetectsDuplicatesWhenSourceCasingChanges()
+    {
+        const string csv = """
+            Date,Description,Amount
+            2026-06-01,Same row,-10.00
+            """;
+        var organizationId = Guid.NewGuid();
+        var repository = new InMemoryImportRepository();
+        var service = new CsvImportService(new GenericCsvParser(), repository);
+        var mapping = new CsvColumnMapping("Date", "Description", AmountColumn: "Amount");
+
+        var first = await service.ImportAsync(
+            new CsvImportRequest(organizationId, "Generic CSV", "first.csv", csv, mapping));
+        var second = await service.ImportAsync(
+            new CsvImportRequest(organizationId, "generic csv", "second.csv", csv, mapping));
+
+        Assert.Equal(1, first.PendingCount);
+        Assert.Equal(0, second.PendingCount);
+        Assert.Equal(1, second.DuplicateCount);
+        Assert.Single(repository.Transactions);
+    }
+
     private sealed class InMemoryImportRepository : IImportRepository
     {
         public List<ImportBatch> Batches { get; } = [];
@@ -96,14 +119,12 @@ public sealed class CsvImportServiceTests
 
         public Task<IReadOnlySet<string>> FindExistingFingerprintsAsync(
             Guid organizationId,
-            string source,
             IReadOnlyCollection<string> fingerprints,
             CancellationToken cancellationToken = default)
         {
             IReadOnlySet<string> existing = Transactions
                 .Where(transaction =>
                     transaction.OrganizationId == organizationId
-                    && transaction.Source == source
                     && fingerprints.Contains(transaction.Fingerprint))
                 .Select(transaction => transaction.Fingerprint)
                 .ToHashSet(StringComparer.Ordinal);

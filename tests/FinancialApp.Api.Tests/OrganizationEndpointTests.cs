@@ -632,14 +632,12 @@ public sealed class OrganizationEndpointTests
 
         public Task<IReadOnlySet<string>> FindExistingFingerprintsAsync(
             Guid organizationId,
-            string source,
             IReadOnlyCollection<string> fingerprints,
             CancellationToken cancellationToken = default)
         {
             IReadOnlySet<string> existing = importedTransactions
                 .Where(transaction =>
                     transaction.OrganizationId == organizationId
-                    && transaction.Source == source
                     && fingerprints.Contains(transaction.Fingerprint))
                 .Select(transaction => transaction.Fingerprint)
                 .ToHashSet(StringComparer.Ordinal);

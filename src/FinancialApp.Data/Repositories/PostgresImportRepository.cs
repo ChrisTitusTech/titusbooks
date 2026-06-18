@@ -15,7 +15,6 @@ public sealed class PostgresImportRepository : IImportRepository
 
     public async Task<IReadOnlySet<string>> FindExistingFingerprintsAsync(
         Guid organizationId,
-        string source,
         IReadOnlyCollection<string> fingerprints,
         CancellationToken cancellationToken = default)
     {
@@ -28,7 +27,6 @@ public sealed class PostgresImportRepository : IImportRepository
             SELECT fingerprint
             FROM imported_transactions
             WHERE organization_id = @OrganizationId
-              AND source = @Source
               AND fingerprint = ANY(@Fingerprints)
             """;
 
@@ -38,7 +36,6 @@ public sealed class PostgresImportRepository : IImportRepository
             new
             {
                 OrganizationId = organizationId,
-                Source = source.Trim(),
                 Fingerprints = fingerprints.ToArray()
             },
             cancellationToken: cancellationToken);
