@@ -164,7 +164,7 @@ Add basic financial visibility before import complexity.
 
 ## Phase 5: Generic CSV Import Framework
 
-**Status: Complete locally; deployed API/PostgreSQL smoke test pending**
+**Status: Complete and verified against the deployed API/PostgreSQL environment**
 
 ### Goal
 
