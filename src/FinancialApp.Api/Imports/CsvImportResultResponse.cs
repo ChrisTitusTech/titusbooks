@@ -3,7 +3,7 @@ using FinancialApp.Importers;
 namespace FinancialApp.Api.Imports;
 
 public sealed record CsvImportResultResponse(
-    Guid ImportBatchId,
+    Guid? ImportBatchId,
     int PendingCount,
     int DuplicateCount,
     int ErrorCount)

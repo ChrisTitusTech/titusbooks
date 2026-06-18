@@ -33,12 +33,16 @@ public sealed class PostgresImportRepository : IImportRepository
             """;
 
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        var existing = await connection.QueryAsync<string>(sql, new
-        {
-            OrganizationId = organizationId,
-            Source = source.Trim(),
-            Fingerprints = fingerprints.ToArray()
-        });
+        var command = new CommandDefinition(
+            sql,
+            new
+            {
+                OrganizationId = organizationId,
+                Source = source.Trim(),
+                Fingerprints = fingerprints.ToArray()
+            },
+            cancellationToken: cancellationToken);
+        var existing = await connection.QueryAsync<string>(command);
 
         return existing.ToHashSet(StringComparer.Ordinal);
     }
@@ -106,35 +110,45 @@ public sealed class PostgresImportRepository : IImportRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         try
         {
-            await connection.ExecuteAsync(insertBatchSql, new
-            {
-                batch.Id,
-                batch.OrganizationId,
-                batch.Source,
-                batch.FileName,
-                batch.FileHash,
-                batch.ImportedAt,
-                batch.RawMetadataJson
-            }, transaction);
+            var batchCommand = new CommandDefinition(
+                insertBatchSql,
+                new
+                {
+                    batch.Id,
+                    batch.OrganizationId,
+                    batch.Source,
+                    batch.FileName,
+                    batch.FileHash,
+                    batch.ImportedAt,
+                    batch.RawMetadataJson
+                },
+                transaction,
+                cancellationToken: cancellationToken);
+            await connection.ExecuteAsync(batchCommand);
 
             foreach (var importedTransaction in transactions)
             {
-                await connection.ExecuteAsync(insertTransactionSql, new
-                {
-                    importedTransaction.Id,
-                    importedTransaction.OrganizationId,
-                    importedTransaction.ImportBatchId,
-                    importedTransaction.Source,
-                    importedTransaction.SourceTransactionId,
-                    PostedDate = importedTransaction.PostedDate.ToDateTime(TimeOnly.MinValue),
-                    importedTransaction.Description,
-                    importedTransaction.RawDescription,
-                    importedTransaction.Amount,
-                    importedTransaction.Currency,
-                    Status = importedTransaction.Status.ToString().ToLowerInvariant(),
-                    importedTransaction.Fingerprint,
-                    importedTransaction.RawPayloadJson
-                }, transaction);
+                var transactionCommand = new CommandDefinition(
+                    insertTransactionSql,
+                    new
+                    {
+                        importedTransaction.Id,
+                        importedTransaction.OrganizationId,
+                        importedTransaction.ImportBatchId,
+                        importedTransaction.Source,
+                        importedTransaction.SourceTransactionId,
+                        PostedDate = importedTransaction.PostedDate.ToDateTime(TimeOnly.MinValue),
+                        importedTransaction.Description,
+                        importedTransaction.RawDescription,
+                        importedTransaction.Amount,
+                        importedTransaction.Currency,
+                        Status = importedTransaction.Status.ToString().ToLowerInvariant(),
+                        importedTransaction.Fingerprint,
+                        importedTransaction.RawPayloadJson
+                    },
+                    transaction,
+                    cancellationToken: cancellationToken);
+                await connection.ExecuteAsync(transactionCommand);
             }
 
             await transaction.CommitAsync(cancellationToken);
@@ -171,9 +185,11 @@ public sealed class PostgresImportRepository : IImportRepository
             """;
 
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        var rows = await connection.QueryAsync<ImportedTransactionRow>(
+        var command = new CommandDefinition(
             sql,
-            new { OrganizationId = organizationId });
+            new { OrganizationId = organizationId },
+            cancellationToken: cancellationToken);
+        var rows = await connection.QueryAsync<ImportedTransactionRow>(command);
         return rows.Select(row => row.ToImportedTransaction()).ToList();
     }
 

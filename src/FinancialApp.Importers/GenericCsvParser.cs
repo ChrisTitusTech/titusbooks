@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using FinancialApp.Core.Imports;
 using Microsoft.VisualBasic.FileIO;
@@ -7,6 +8,8 @@ namespace FinancialApp.Importers;
 
 public sealed class GenericCsvParser
 {
+    private const int MaximumCsvByteCount = 10 * 1024 * 1024;
+
     private static readonly string[] SupportedDateFormats =
     [
         "yyyy-MM-dd",
@@ -22,13 +25,7 @@ public sealed class GenericCsvParser
         ValidateRequest(request);
 
         using var reader = new StringReader(request.CsvContent);
-        using var parser = new TextFieldParser(reader)
-        {
-            TextFieldType = FieldType.Delimited,
-            HasFieldsEnclosedInQuotes = true,
-            TrimWhiteSpace = false
-        };
-        parser.SetDelimiters(",");
+        using var parser = CreateParser(reader);
 
         var headers = ReadHeaderFields(parser);
         ValidateHeaders(headers, request.Mapping);
@@ -59,23 +56,26 @@ public sealed class GenericCsvParser
 
     public IReadOnlyList<string> ReadHeaders(string csvContent)
     {
-        if (string.IsNullOrWhiteSpace(csvContent))
-        {
-            throw new InvalidOperationException("CSV content is required.");
-        }
+        ValidateCsvContent(csvContent);
 
         using var reader = new StringReader(csvContent);
-        using var parser = new TextFieldParser(reader)
+        using var parser = CreateParser(reader);
+
+        var headers = ReadHeaderFields(parser);
+        ValidateHeaderNames(headers);
+        return headers;
+    }
+
+    private static TextFieldParser CreateParser(TextReader reader)
+    {
+        var parser = new TextFieldParser(reader)
         {
             TextFieldType = FieldType.Delimited,
             HasFieldsEnclosedInQuotes = true,
             TrimWhiteSpace = false
         };
         parser.SetDelimiters(",");
-
-        var headers = ReadHeaderFields(parser);
-        ValidateHeaderNames(headers);
-        return headers;
+        return parser;
     }
 
     private static string[] ReadHeaderFields(TextFieldParser parser)
@@ -106,6 +106,7 @@ public sealed class GenericCsvParser
             var amount = ParseAmount(rawValues, request.Mapping);
             var currency = GetOptionalValue(rawValues, request.Mapping.CurrencyColumn)
                 ?? request.Mapping.DefaultCurrency;
+            var normalizedCurrency = NormalizeCurrency(currency);
             var sourceTransactionId = GetOptionalValue(
                 rawValues,
                 request.Mapping.SourceTransactionIdColumn);
@@ -113,11 +114,6 @@ public sealed class GenericCsvParser
             if (description.Length == 0)
             {
                 throw new InvalidOperationException("Description is required.");
-            }
-
-            if (currency.Trim().Length != 3)
-            {
-                throw new InvalidOperationException("Currency must use a three-letter code.");
             }
 
             var transaction = new ImportedTransaction
@@ -130,9 +126,14 @@ public sealed class GenericCsvParser
                 Description = description,
                 RawDescription = description,
                 Amount = amount,
-                Currency = currency.Trim().ToUpperInvariant(),
+                Currency = normalizedCurrency,
                 Status = ImportedTransactionStatus.Pending,
-                Fingerprint = ImportFingerprint.Create(request.Source, postedDate, amount, description),
+                Fingerprint = ImportFingerprint.Create(
+                    request.Source,
+                    postedDate,
+                    amount,
+                    description,
+                    sourceTransactionId),
                 RawPayloadJson = JsonSerializer.Serialize(rawValues)
             };
 
@@ -257,10 +258,8 @@ public sealed class GenericCsvParser
             throw new InvalidOperationException("Import source is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.CsvContent))
-        {
-            throw new InvalidOperationException("CSV content is required.");
-        }
+        ValidateCsvContent(request.CsvContent);
+        _ = NormalizeCurrency(request.Mapping.DefaultCurrency);
 
         if (string.IsNullOrWhiteSpace(request.Mapping.DateColumn)
             || string.IsNullOrWhiteSpace(request.Mapping.DescriptionColumn))
@@ -276,6 +275,31 @@ public sealed class GenericCsvParser
             throw new InvalidOperationException(
                 "Map either one amount column or debit/credit columns.");
         }
+    }
+
+    private static void ValidateCsvContent(string csvContent)
+    {
+        if (string.IsNullOrWhiteSpace(csvContent))
+        {
+            throw new InvalidOperationException("CSV content is required.");
+        }
+
+        if (Encoding.UTF8.GetByteCount(csvContent) > MaximumCsvByteCount)
+        {
+            throw new InvalidOperationException("CSV content exceeds the 10 MB import limit.");
+        }
+    }
+
+    private static string NormalizeCurrency(string? currency)
+    {
+        var normalizedCurrency = currency?.Trim().ToUpperInvariant();
+        if (normalizedCurrency?.Length != 3
+            || normalizedCurrency.Any(character => !char.IsAsciiLetter(character)))
+        {
+            throw new InvalidOperationException("Currency must use a three-letter code.");
+        }
+
+        return normalizedCurrency;
     }
 
     private static void ValidateHeaders(
@@ -306,9 +330,9 @@ public sealed class GenericCsvParser
 
     private static void ValidateHeaderNames(IReadOnlyList<string> headers)
     {
-        if (headers.Count == 0 || headers.All(string.IsNullOrWhiteSpace))
+        if (headers.Count == 0 || headers.Any(string.IsNullOrWhiteSpace))
         {
-            throw new InvalidOperationException("CSV header row is empty.");
+            throw new InvalidOperationException("CSV header names cannot be empty.");
         }
 
         var duplicates = headers

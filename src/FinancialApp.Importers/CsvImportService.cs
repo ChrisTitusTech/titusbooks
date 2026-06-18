@@ -41,9 +41,8 @@ public sealed class CsvImportService
             cancellationToken);
 
         var seen = new HashSet<string>(existing, StringComparer.Ordinal);
-        var pendingTransactions = new List<ImportedTransaction>();
+        var uniqueTransactions = new List<ImportedTransaction>();
         var duplicateCount = 0;
-        var batchId = Guid.NewGuid();
 
         foreach (var transaction in validTransactions)
         {
@@ -53,10 +52,40 @@ public sealed class CsvImportService
                 continue;
             }
 
-            pendingTransactions.Add(transaction with { ImportBatchId = batchId });
+            uniqueTransactions.Add(transaction);
         }
 
-        var batch = new ImportBatch
+        if (uniqueTransactions.Count == 0)
+        {
+            return new CsvImportResult(
+                null,
+                0,
+                duplicateCount,
+                preview.ErrorCount);
+        }
+
+        var batchId = Guid.NewGuid();
+        var pendingTransactions = uniqueTransactions
+            .Select(transaction => transaction with { ImportBatchId = batchId })
+            .ToList();
+        await repository.AddBatchAsync(
+            CreateBatch(request, preview, batchId),
+            pendingTransactions,
+            cancellationToken);
+
+        return new CsvImportResult(
+            batchId,
+            pendingTransactions.Count,
+            duplicateCount,
+            preview.ErrorCount);
+    }
+
+    private static ImportBatch CreateBatch(
+        CsvImportRequest request,
+        CsvImportPreview preview,
+        Guid batchId)
+    {
+        return new ImportBatch
         {
             Id = batchId,
             OrganizationId = request.OrganizationId,
@@ -71,13 +100,5 @@ public sealed class CsvImportService
                 RowCount = preview.Rows.Count
             })
         };
-
-        await repository.AddBatchAsync(batch, pendingTransactions, cancellationToken);
-
-        return new CsvImportResult(
-            batch.Id,
-            pendingTransactions.Count,
-            duplicateCount,
-            preview.ErrorCount);
     }
 }

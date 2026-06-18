@@ -10,6 +10,8 @@ namespace FinancialApp.Desktop.ViewModels;
 
 public sealed partial class MainWindowViewModel : ViewModelBase
 {
+    private const string UnmappedColumn = "(Not mapped)";
+
     [ObservableProperty]
     private NavigationPage currentPage = NavigationPage.Home;
 
@@ -137,6 +139,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IImportFilePicker? importFilePicker;
     private string? importCsvContent;
     private int accountLoadVersion;
+    private int dashboardLoadVersion;
+    private int importLoadVersion;
 
     public MainWindowViewModel()
         : this(new AppSettings())
@@ -292,13 +296,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private async Task LoadDashboardAsync()
     {
-        DashboardIncomeSources.Clear();
-        DashboardExpenseCategories.Clear();
-        DashboardIncome = 0;
-        DashboardExpenses = 0;
-        DashboardNetIncome = 0;
-
-        if (apiClient is null || SelectedOrganization is null)
+        var organization = SelectedOrganization;
+        var loadVersion = Interlocked.Increment(ref dashboardLoadVersion);
+        ClearDashboard();
+        if (apiClient is null || organization is null)
         {
             return;
         }
@@ -308,9 +309,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             var endDate = DateOnly.FromDateTime(DateTime.Today);
             var startDate = new DateOnly(endDate.Year, 1, 1);
             var report = await apiClient.GetProfitAndLossAsync(
-                SelectedOrganization.Id,
+                organization.Id,
                 startDate,
                 endDate);
+            if (loadVersion != dashboardLoadVersion)
+            {
+                return;
+            }
 
             DashboardIncome = report.TotalIncome;
             DashboardExpenses = report.TotalExpenses;
@@ -806,15 +811,22 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     public async Task LoadImportedTransactionsAsync()
     {
+        var organization = SelectedOrganization;
+        var loadVersion = Interlocked.Increment(ref importLoadVersion);
         ImportedTransactions.Clear();
-        if (apiClient is null || SelectedOrganization is null)
+        if (apiClient is null || organization is null)
         {
             return;
         }
 
         try
         {
-            var transactions = await apiClient.ListImportedTransactionsAsync(SelectedOrganization.Id);
+            var transactions = await apiClient.ListImportedTransactionsAsync(organization.Id);
+            if (loadVersion != importLoadVersion)
+            {
+                return;
+            }
+
             foreach (var transaction in transactions)
             {
                 ImportedTransactions.Add(transaction);
@@ -837,8 +849,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
 
         _ = LoadAccountsForOrganizationAsync(value);
-        _ = LoadDashboardAsync();
-        _ = LoadImportedTransactionsAsync();
+        if (CurrentPage == NavigationPage.Home)
+        {
+            _ = LoadDashboardAsync();
+        }
+        else if (CurrentPage == NavigationPage.Imports)
+        {
+            _ = LoadImportedTransactionsAsync();
+        }
     }
 
     partial void OnCurrentPageChanged(NavigationPage value)
@@ -901,6 +919,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         SelectedFromAccount = null;
         SelectedToAccount = null;
         SelectedRegisterAccount = null;
+        ImportedTransactions.Clear();
+        Interlocked.Increment(ref dashboardLoadVersion);
+        Interlocked.Increment(ref importLoadVersion);
+        ClearDashboard();
         ClearReport();
         RefreshTransactionAccountOptions();
     }
@@ -1001,6 +1023,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             return false;
         }
 
+        if (string.IsNullOrWhiteSpace(ImportSource))
+        {
+            WorkspaceMessage = "Enter an import source name.";
+            return false;
+        }
+
+        var defaultCurrency = DefaultImportCurrency.Trim().ToUpperInvariant();
+        if (defaultCurrency.Length != 3)
+        {
+            WorkspaceMessage = "Default currency must use a three-letter code.";
+            return false;
+        }
+
         var dateColumn = NormalizeOptionalColumn(SelectedDateColumn);
         var descriptionColumn = NormalizeOptionalColumn(SelectedDescriptionColumn);
         if (dateColumn is null || descriptionColumn is null)
@@ -1036,14 +1071,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 creditColumn,
                 NormalizeOptionalColumn(SelectedSourceIdColumn),
                 NormalizeOptionalColumn(SelectedCurrencyColumn),
-                DefaultImportCurrency.Trim().ToUpperInvariant()));
+                defaultCurrency));
         return true;
     }
 
     private void ReplaceCsvHeaders(IEnumerable<string> headers)
     {
         CsvHeaders.Clear();
-        CsvHeaders.Add("(Not mapped)");
+        CsvHeaders.Add(UnmappedColumn);
         foreach (var header in headers)
         {
             CsvHeaders.Add(header);
@@ -1054,29 +1089,48 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         SelectedDateColumn = FindHeader(headers, "date", "posted");
         SelectedDescriptionColumn = FindHeader(headers, "description", "memo", "name", "details");
-        SelectedAmountColumn = FindHeader(headers, "amount", "value") ?? "(Not mapped)";
-        SelectedDebitColumn = SelectedAmountColumn == "(Not mapped)"
-            ? FindHeader(headers, "debit", "withdrawal") ?? "(Not mapped)"
-            : "(Not mapped)";
-        SelectedCreditColumn = SelectedAmountColumn == "(Not mapped)"
-            ? FindHeader(headers, "credit", "deposit") ?? "(Not mapped)"
-            : "(Not mapped)";
-        SelectedSourceIdColumn = FindHeader(headers, "transaction id", "id", "reference") ?? "(Not mapped)";
-        SelectedCurrencyColumn = FindHeader(headers, "currency") ?? "(Not mapped)";
+        SelectedAmountColumn = FindHeader(headers, "amount", "value") ?? UnmappedColumn;
+        SelectedDebitColumn = SelectedAmountColumn == UnmappedColumn
+            ? FindHeader(headers, "debit", "withdrawal") ?? UnmappedColumn
+            : UnmappedColumn;
+        SelectedCreditColumn = SelectedAmountColumn == UnmappedColumn
+            ? FindHeader(headers, "credit", "deposit") ?? UnmappedColumn
+            : UnmappedColumn;
+        SelectedSourceIdColumn = FindHeader(headers, "transaction id", "id", "reference") ?? UnmappedColumn;
+        SelectedCurrencyColumn = FindHeader(headers, "currency") ?? UnmappedColumn;
     }
 
     private static string? FindHeader(
         IEnumerable<string> headers,
         params string[] candidates)
     {
-        return headers.FirstOrDefault(header =>
+        var headerList = headers.ToList();
+        var exactMatch = headerList.FirstOrDefault(header =>
             candidates.Any(candidate =>
-                header.Contains(candidate, StringComparison.OrdinalIgnoreCase)));
+                string.Equals(header, candidate, StringComparison.OrdinalIgnoreCase)));
+        if (exactMatch is not null)
+        {
+            return exactMatch;
+        }
+
+        return headerList.FirstOrDefault(header =>
+            candidates
+                .Where(candidate => candidate.Length >= 4)
+                .Any(candidate => header.Contains(candidate, StringComparison.OrdinalIgnoreCase)));
     }
 
     private static string? NormalizeOptionalColumn(string? column)
     {
-        return string.IsNullOrWhiteSpace(column) || column == "(Not mapped)" ? null : column;
+        return string.IsNullOrWhiteSpace(column) || column == UnmappedColumn ? null : column;
+    }
+
+    private void ClearDashboard()
+    {
+        DashboardIncomeSources.Clear();
+        DashboardExpenseCategories.Clear();
+        DashboardIncome = 0;
+        DashboardExpenses = 0;
+        DashboardNetIncome = 0;
     }
 
     private void RefreshTransactionAccountOptions()

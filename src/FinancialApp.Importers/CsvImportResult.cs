@@ -1,7 +1,7 @@
 namespace FinancialApp.Importers;
 
 public sealed record CsvImportResult(
-    Guid ImportBatchId,
+    Guid? ImportBatchId,
     int PendingCount,
     int DuplicateCount,
     int ErrorCount);

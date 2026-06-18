@@ -31,6 +31,9 @@ public sealed class CsvImportServiceTests
         Assert.Equal(0, first.ErrorCount);
         Assert.Equal(0, second.PendingCount);
         Assert.Equal(3, second.DuplicateCount);
+        Assert.NotNull(first.ImportBatchId);
+        Assert.Null(second.ImportBatchId);
+        Assert.Single(repository.Batches);
         Assert.Equal(2, repository.Transactions.Count);
         Assert.All(repository.Transactions, transaction =>
             Assert.Equal(ImportedTransactionStatus.Pending, transaction.Status));
@@ -60,8 +63,35 @@ public sealed class CsvImportServiceTests
         Assert.Single(repository.Transactions);
     }
 
+    [Fact]
+    public async Task ImportAsync_DoesNotCreateBatchWhenEveryRowIsInvalid()
+    {
+        const string csv = """
+            Date,Description,Amount
+            invalid,Bad date,5.00
+            """;
+        var repository = new InMemoryImportRepository();
+        var service = new CsvImportService(new GenericCsvParser(), repository);
+        var request = new CsvImportRequest(
+            Guid.NewGuid(),
+            "Generic CSV",
+            "fake.csv",
+            csv,
+            new CsvColumnMapping("Date", "Description", AmountColumn: "Amount"));
+
+        var result = await service.ImportAsync(request);
+
+        Assert.Null(result.ImportBatchId);
+        Assert.Equal(0, result.PendingCount);
+        Assert.Equal(1, result.ErrorCount);
+        Assert.Empty(repository.Batches);
+        Assert.Empty(repository.Transactions);
+    }
+
     private sealed class InMemoryImportRepository : IImportRepository
     {
+        public List<ImportBatch> Batches { get; } = [];
+
         public List<ImportedTransaction> Transactions { get; } = [];
 
         public Task<IReadOnlySet<string>> FindExistingFingerprintsAsync(
@@ -85,6 +115,7 @@ public sealed class CsvImportServiceTests
             IReadOnlyCollection<ImportedTransaction> transactions,
             CancellationToken cancellationToken = default)
         {
+            Batches.Add(batch);
             Transactions.AddRange(transactions);
             return Task.CompletedTask;
         }
