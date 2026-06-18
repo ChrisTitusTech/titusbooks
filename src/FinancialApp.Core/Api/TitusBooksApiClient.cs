@@ -188,6 +188,76 @@ public sealed class TitusBooksApiClient
             ?? [];
     }
 
+    public async Task<ProfitAndLossReportSummary> GetProfitAndLossAsync(
+        Guid organizationId,
+        DateOnly startDate,
+        DateOnly endDate,
+        CancellationToken cancellationToken = default)
+    {
+        return await GetRequiredAsync<ProfitAndLossReportSummary>(
+            BuildReportPath(organizationId, "profit-and-loss", startDate, endDate),
+            "API returned an empty Profit and Loss report.",
+            cancellationToken);
+    }
+
+    public async Task<AccountBreakdownReportSummary> GetExpensesByCategoryAsync(
+        Guid organizationId,
+        DateOnly startDate,
+        DateOnly endDate,
+        CancellationToken cancellationToken = default)
+    {
+        return await GetRequiredAsync<AccountBreakdownReportSummary>(
+            BuildReportPath(organizationId, "expenses-by-category", startDate, endDate),
+            "API returned an empty expense report.",
+            cancellationToken);
+    }
+
+    public async Task<AccountBreakdownReportSummary> GetIncomeBySourceAsync(
+        Guid organizationId,
+        DateOnly startDate,
+        DateOnly endDate,
+        CancellationToken cancellationToken = default)
+    {
+        return await GetRequiredAsync<AccountBreakdownReportSummary>(
+            BuildReportPath(organizationId, "income-by-source", startDate, endDate),
+            "API returned an empty income report.",
+            cancellationToken);
+    }
+
+    public async Task<string> GetReportCsvAsync(
+        Guid organizationId,
+        string reportName,
+        DateOnly startDate,
+        DateOnly endDate,
+        CancellationToken cancellationToken = default)
+    {
+        var path = BuildReportPath(organizationId, $"{reportName}/csv", startDate, endDate);
+        using var response = await httpClient.GetAsync(path, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadAsStringAsync(cancellationToken);
+    }
+
+    private async Task<T> GetRequiredAsync<T>(
+        string path,
+        string emptyResponseMessage,
+        CancellationToken cancellationToken)
+    {
+        using var response = await httpClient.GetAsync(path, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await ReadRequiredJsonAsync<T>(response, emptyResponseMessage, cancellationToken);
+    }
+
+    private static string BuildReportPath(
+        Guid organizationId,
+        string reportName,
+        DateOnly startDate,
+        DateOnly endDate)
+    {
+        return $"/organizations/{organizationId}/reports/{reportName}"
+            + $"?startDate={Uri.EscapeDataString(startDate.ToString("O"))}"
+            + $"&endDate={Uri.EscapeDataString(endDate.ToString("O"))}";
+    }
+
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         if (response.IsSuccessStatusCode)

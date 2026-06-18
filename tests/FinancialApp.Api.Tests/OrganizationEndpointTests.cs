@@ -4,6 +4,7 @@ using FinancialApp.Api.Accounting;
 using FinancialApp.Api.Organizations;
 using FinancialApp.Core.Accounting;
 using FinancialApp.Core.Organizations;
+using FinancialApp.Reports;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -286,6 +287,73 @@ public sealed class OrganizationEndpointTests
         Assert.Equal("Office Supplies", entry.OtherAccounts);
     }
 
+    [Fact]
+    public async Task ProfitAndLoss_ReturnsPostedIncomeExpensesAndNetIncome()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = await CreateOrganizationAsync(client);
+        var checking = await CreateAccountAsync(client, organizationId, "Checking", "Asset", "Checking");
+        var consulting = await CreateAccountAsync(client, organizationId, "Consulting Income", "Income");
+        var supplies = await CreateAccountAsync(client, organizationId, "Office Supplies", "Expense");
+        await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/transactions/income",
+            new PostIncomeRequest(new DateOnly(2026, 6, 10), checking.Id, consulting.Id, 500m, "Client payment"));
+        await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/transactions/expenses",
+            new PostExpenseRequest(new DateOnly(2026, 6, 11), checking.Id, supplies.Id, 75m, "Paper"));
+
+        var response = await client.GetAsync(
+            $"/organizations/{organizationId}/reports/profit-and-loss"
+            + "?startDate=2026-06-01&endDate=2026-06-30");
+        var report = await response.Content.ReadFromJsonAsync<FinancialApp.Api.Reporting.ProfitAndLossReportResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(report);
+        Assert.Equal(500m, report.TotalIncome);
+        Assert.Equal(75m, report.TotalExpenses);
+        Assert.Equal(425m, report.NetIncome);
+    }
+
+    [Fact]
+    public async Task ExpenseReportCsv_ReturnsCsvContent()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = await CreateOrganizationAsync(client);
+        var checking = await CreateAccountAsync(client, organizationId, "Checking", "Asset", "Checking");
+        var supplies = await CreateAccountAsync(client, organizationId, "Office Supplies", "Expense");
+        await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/transactions/expenses",
+            new PostExpenseRequest(new DateOnly(2026, 6, 11), checking.Id, supplies.Id, 75m, "Paper"));
+
+        var response = await client.GetAsync(
+            $"/organizations/{organizationId}/reports/expenses-by-category/csv"
+            + "?startDate=2026-06-01&endDate=2026-06-30");
+        var csv = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/csv", response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("Expenses by Category,Office Supplies,75.00", csv);
+    }
+
+    [Fact]
+    public async Task ProfitAndLoss_RejectsInvertedDateRange()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = await CreateOrganizationAsync(client);
+
+        var response = await client.GetAsync(
+            $"/organizations/{organizationId}/reports/profit-and-loss"
+            + "?startDate=2026-07-01&endDate=2026-06-30");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     private static async Task<Guid> CreateOrganizationAsync(HttpClient client)
     {
         var response = await client.PostAsJsonAsync(
@@ -321,16 +389,24 @@ public sealed class OrganizationEndpointTests
                     services.RemoveAll<IJournalEntryRepository>();
                     services.RemoveAll<DefaultChartOfAccountsSeeder>();
                     services.RemoveAll<AccountingService>();
+                    services.RemoveAll<IFinancialReportRepository>();
+                    services.RemoveAll<FinancialReportService>();
                     services.AddSingleton<IOrganizationRepository>(repositories);
                     services.AddSingleton<IAccountRepository>(repositories);
                     services.AddSingleton<IJournalEntryRepository>(repositories);
                     services.AddSingleton<DefaultChartOfAccountsSeeder>();
                     services.AddSingleton<AccountingService>();
+                    services.AddSingleton<IFinancialReportRepository>(repositories);
+                    services.AddSingleton<FinancialReportService>();
                 });
             });
     }
 
-    private sealed class InMemoryRepositories : IOrganizationRepository, IAccountRepository, IJournalEntryRepository
+    private sealed class InMemoryRepositories :
+        IOrganizationRepository,
+        IAccountRepository,
+        IJournalEntryRepository,
+        IFinancialReportRepository
     {
         private readonly List<Account> accounts = [];
         private readonly List<JournalEntry> journalEntries = [];
@@ -443,6 +519,38 @@ public sealed class OrganizationEndpointTests
                 .ToList();
 
             return Task.FromResult<IReadOnlyList<AccountRegisterEntry>>(registerEntries);
+        }
+
+        public Task<IReadOnlyList<AccountReportTotal>> ListAccountTotalsAsync(
+            Guid organizationId,
+            AccountType accountType,
+            DateOnly startDate,
+            DateOnly endDate,
+            CancellationToken cancellationToken = default)
+        {
+            var totals = journalEntries
+                .Where(entry => entry.OrganizationId == organizationId && !entry.IsVoid)
+                .Where(entry => entry.EntryDate >= startDate && entry.EntryDate <= endDate)
+                .SelectMany(entry => entry.Lines)
+                .Join(
+                    accounts.Where(account =>
+                        account.OrganizationId == organizationId
+                        && account.AccountType == accountType),
+                    line => line.AccountId,
+                    account => account.Id,
+                    (line, account) => new { Line = line, Account = account })
+                .GroupBy(item => item.Account)
+                .Select(group => new AccountReportTotal(
+                    group.Key.Id,
+                    group.Key.Name,
+                    accountType == AccountType.Income
+                        ? group.Sum(item => item.Line.Credit - item.Line.Debit)
+                        : group.Sum(item => item.Line.Debit - item.Line.Credit)))
+                .Where(total => total.Amount != 0)
+                .OrderBy(total => total.AccountName)
+                .ToList();
+
+            return Task.FromResult<IReadOnlyList<AccountReportTotal>>(totals);
         }
     }
 }

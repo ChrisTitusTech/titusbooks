@@ -1,0 +1,233 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:FinancialApp.Desktop.ViewModels"
+             xmlns:api="using:FinancialApp.Core.Api"
+             x:Class="FinancialApp.Desktop.Views.HomeView"
+             x:DataType="vm:MainWindowViewModel">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <Grid Margin="28,0,28,32"
+              ColumnDefinitions="*,310"
+              ColumnSpacing="24">
+            <StackPanel Spacing="22">
+                <Border Background="White"
+                        BorderBrush="#DCE2E9"
+                        BorderThickness="1"
+                        Padding="24">
+                    <Grid RowDefinitions="Auto,Auto,Auto"
+                          RowSpacing="18">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="Profit and loss"
+                                           FontSize="19"
+                                           FontWeight="SemiBold"
+                                           Foreground="#172033"/>
+                                <TextBlock Text="{Binding DashboardPeriod}"
+                                           FontSize="12"
+                                           Foreground="#64748B"/>
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Command="{Binding NavigateCommand}"
+                                    CommandParameter="Reports"
+                                    Content="View reports"
+                                    Background="Transparent"
+                                    Foreground="#087EA4"
+                                    BorderThickness="0"/>
+                        </Grid>
+
+                        <Grid Grid.Row="1"
+                              ColumnDefinitions="*,*,*"
+                              ColumnSpacing="28">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{Binding DashboardIncome, StringFormat='{}{0:C}'}"
+                                           FontSize="28"
+                                           FontWeight="SemiBold"
+                                           Foreground="#172033"/>
+                                <TextBlock Text="INCOME"
+                                           FontSize="11"
+                                           Foreground="#64748B"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1"
+                                        Spacing="4">
+                                <TextBlock Text="{Binding DashboardExpenses, StringFormat='{}{0:C}'}"
+                                           FontSize="28"
+                                           FontWeight="SemiBold"
+                                           Foreground="#172033"/>
+                                <TextBlock Text="EXPENSES"
+                                           FontSize="11"
+                                           Foreground="#64748B"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2"
+                                        Spacing="4">
+                                <TextBlock Text="{Binding DashboardNetIncome, StringFormat='{}{0:C}'}"
+                                           FontSize="28"
+                                           FontWeight="SemiBold"
+                                           Foreground="#176B45"/>
+                                <TextBlock Text="NET INCOME"
+                                           FontSize="11"
+                                           Foreground="#64748B"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Grid.Row="2"
+                              Height="12"
+                              ColumnDefinitions="2*,*">
+                            <Border Background="#28A6C7"/>
+                            <Border Grid.Column="1"
+                                    Background="#F0A32F"/>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <Border Background="White"
+                        BorderBrush="#DCE2E9"
+                        BorderThickness="1"
+                        Padding="24">
+                    <Grid RowDefinitions="Auto,*"
+                          RowSpacing="16">
+                        <TextBlock Text="Income sources"
+                                   FontSize="19"
+                                   FontWeight="SemiBold"
+                                   Foreground="#172033"/>
+                        <ItemsControl Grid.Row="1"
+                                      ItemsSource="{Binding DashboardIncomeSources}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="api:AccountReportTotalSummary">
+                                    <Grid Margin="0,7"
+                                          ColumnDefinitions="*,140">
+                                        <TextBlock Text="{Binding AccountName}"
+                                                   Foreground="#334155"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Amount, StringFormat='{}{0:C}'}"
+                                                   HorizontalAlignment="Right"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#172033"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </Border>
+
+                <Border Background="White"
+                        BorderBrush="#DCE2E9"
+                        BorderThickness="1"
+                        Padding="24">
+                    <Grid RowDefinitions="Auto,*"
+                          RowSpacing="16">
+                        <TextBlock Text="Expense categories"
+                                   FontSize="19"
+                                   FontWeight="SemiBold"
+                                   Foreground="#172033"/>
+                        <ItemsControl Grid.Row="1"
+                                      ItemsSource="{Binding DashboardExpenseCategories}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="api:AccountReportTotalSummary">
+                                    <Grid Margin="0,7"
+                                          ColumnDefinitions="*,140">
+                                        <TextBlock Text="{Binding AccountName}"
+                                                   Foreground="#334155"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Amount, StringFormat='{}{0:C}'}"
+                                                   HorizontalAlignment="Right"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#172033"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Grid.Column="1"
+                        Spacing="22">
+                <Border Background="White"
+                        BorderBrush="#DCE2E9"
+                        BorderThickness="1"
+                        Padding="20">
+                    <Grid RowDefinitions="Auto,*"
+                          RowSpacing="12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="Accounts"
+                                       FontSize="18"
+                                       FontWeight="SemiBold"
+                                       Foreground="#172033"/>
+                            <Button Grid.Column="1"
+                                    Command="{Binding NavigateCommand}"
+                                    CommandParameter="Accounts"
+                                    Content="Manage"
+                                    Background="Transparent"
+                                    Foreground="#087EA4"
+                                    BorderThickness="0"/>
+                        </Grid>
+                        <ItemsControl Grid.Row="1"
+                                      ItemsSource="{Binding Accounts}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="api:AccountSummary">
+                                    <Grid Margin="0,7"
+                                          ColumnDefinitions="*,Auto">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#172033"/>
+                                            <TextBlock Text="{Binding AccountSubtype}"
+                                                       FontSize="11"
+                                                       Foreground="#64748B"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding AccountType}"
+                                                   Foreground="#475569"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </Border>
+
+                <Border Background="White"
+                        BorderBrush="#DCE2E9"
+                        BorderThickness="1"
+                        Padding="20">
+                    <Grid RowDefinitions="Auto,*"
+                          RowSpacing="12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="Recent activity"
+                                       FontSize="18"
+                                       FontWeight="SemiBold"
+                                       Foreground="#172033"/>
+                            <Button Grid.Column="1"
+                                    Command="{Binding NavigateCommand}"
+                                    CommandParameter="Transactions"
+                                    Content="Open"
+                                    Background="Transparent"
+                                    Foreground="#087EA4"
+                                    BorderThickness="0"/>
+                        </Grid>
+                        <ItemsControl Grid.Row="1"
+                                      ItemsSource="{Binding RegisterEntries}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="api:AccountRegisterEntrySummary">
+                                    <Grid Margin="0,8"
+                                          ColumnDefinitions="*,Auto">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Memo}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="#172033"/>
+                                            <TextBlock Text="{Binding EntryDate}"
+                                                       FontSize="11"
+                                                       Foreground="#64748B"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Credit, StringFormat='{}{0:C}'}"
+                                                   Foreground="#8A3D3D"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

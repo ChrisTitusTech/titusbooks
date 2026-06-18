@@ -7,6 +7,7 @@ using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
 using FinancialApp.Core.Api;
 using FinancialApp.Core.Application;
+using FinancialApp.Desktop.Services;
 using FinancialApp.Desktop.ViewModels;
 using FinancialApp.Desktop.Views;
 using Microsoft.Extensions.Configuration;
@@ -38,15 +39,21 @@ public partial class App : Application
                 .CreateLogger<App>()
                 .LogInformation("{ApplicationName} starting with {EnvironmentName} settings.", settings.ApplicationName, settings.EnvironmentName);
 
+            MainWindow? mainWindow = null;
             var apiHttpClient = CreateApiHttpClient(settings);
-            var viewModel = new MainWindowViewModel(settings, new TitusBooksApiClient(apiHttpClient));
+            var reportFileSaver = new AvaloniaReportFileSaver(() => mainWindow?.StorageProvider);
+            var viewModel = new MainWindowViewModel(
+                settings,
+                new TitusBooksApiClient(apiHttpClient),
+                reportFileSaver);
             _ = CheckApiHealthAsync(apiHttpClient, viewModel);
             _ = viewModel.InitializeAsync();
 
-            desktop.MainWindow = new MainWindow
+            mainWindow = new MainWindow
             {
                 DataContext = viewModel,
             };
+            desktop.MainWindow = mainWindow;
         }
 
         base.OnFrameworkInitializationCompleted();

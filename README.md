@@ -2,7 +2,7 @@
 
 TitusBooks is a multi-platform bookkeeping desktop app on an Avalonia + ASP.NET Core + .NET 10 + PostgreSQL foundation.
 
-The current implementation is in Phase 1 of the roadmap: API, database, and domain foundation. It includes the solution structure, placeholder desktop shell, configuration model, logging setup, PostgreSQL migrations, core accounting models, default chart of accounts seeding, and balanced journal-entry enforcement.
+Phases 0 through 4 of the roadmap are implemented. TitusBooks currently supports organization and account setup, manual expense/income/transfer posting, account registers, Profit and Loss, Expense by Category, Income by Source, date-range filtering, and CSV report export.
 
 ## Files
 
@@ -16,7 +16,7 @@ The current implementation is in Phase 1 of the roadmap: API, database, and doma
 - `src/FinancialApp.Data` - PostgreSQL data access and embedded migrations.
 - `src/FinancialApp.Migrations` - CLI for applying PostgreSQL migrations.
 - `src/FinancialApp.Importers` - Future CSV and provider importers.
-- `src/FinancialApp.Reports` - Future reporting logic.
+- `src/FinancialApp.Reports` - Financial report calculations and CSV export.
 - `tests` - xUnit test projects.
 
 ## Local Development
@@ -37,7 +37,7 @@ Run tests:
 dotnet test TitusBooks.slnx
 ```
 
-Run the placeholder desktop app:
+Run the desktop app:
 
 ```bash
 dotnet run --project src/FinancialApp.Desktop/FinancialApp.Desktop.csproj
@@ -56,6 +56,15 @@ Check API health:
 ```bash
 curl http://127.0.0.1:5000/health
 curl http://127.0.0.1:5000/health/database
+```
+
+Report endpoints use inclusive `startDate` and `endDate` query parameters:
+
+```text
+GET /organizations/{organizationId}/reports/profit-and-loss
+GET /organizations/{organizationId}/reports/expenses-by-category
+GET /organizations/{organizationId}/reports/income-by-source
+GET /organizations/{organizationId}/reports/{reportName}/csv
 ```
 
 ## Database Migrations
@@ -133,12 +142,6 @@ sudo journalctl -u titusbooks-api -n 100 --no-pager
 ```
 
 If `TITUSBOOKS_RUN_MIGRATIONS=true`, the API applies embedded migrations during startup. Keep it `false` if you prefer running migrations manually with `FinancialApp.Migrations`.
-
-## Recommended First Prompt for Codex
-
-```text
-Read AGENTS.md, SPEC.md, ROADMAP.md, and SKILLS.md. Then inspect the repository and create an implementation plan for Phase 0 and Phase 1 only. Do not write code yet. Identify missing decisions for project structure, database migration strategy, and initial file structure.
-```
 
 ## Foundation Stack (Locked)
 

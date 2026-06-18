@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FinancialApp.Core\FinancialApp.Core.csproj" />
+    <ProjectReference Include="..\FinancialApp.Reports\FinancialApp.Reports.csproj" />
   </ItemGroup>
 
   <ItemGroup>

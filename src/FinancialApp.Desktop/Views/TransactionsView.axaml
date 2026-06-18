@@ -1,0 +1,199 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:FinancialApp.Desktop.ViewModels"
+             xmlns:api="using:FinancialApp.Core.Api"
+             x:Class="FinancialApp.Desktop.Views.TransactionsView"
+             x:DataType="vm:MainWindowViewModel">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <Grid Margin="32,0,32,32"
+              ColumnDefinitions="390,*"
+              ColumnSpacing="24"
+              MinHeight="490">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto"
+                  RowSpacing="13">
+                <TextBlock Text="Record transaction"
+                           FontSize="17"
+                           FontWeight="SemiBold"
+                           Foreground="#0F172A"/>
+
+                <Grid Grid.Row="1"
+                      ColumnDefinitions="*,*"
+                      ColumnSpacing="10">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Type"
+                                   FontSize="12"
+                                   Foreground="#475569"/>
+                        <ComboBox MinHeight="40"
+                                  ItemsSource="{Binding TransactionTypes}"
+                                  SelectedItem="{Binding SelectedTransactionType}"
+                                  Background="White"
+                                  Foreground="#111827"
+                                  BorderBrush="#94A3B8"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1"
+                                Spacing="4">
+                        <TextBlock Text="Date"
+                                   FontSize="12"
+                                   Foreground="#475569"/>
+                        <TextBox MinHeight="40"
+                                 Text="{Binding TransactionDate}"
+                                 Background="White"
+                                 Foreground="#111827"
+                                 BorderBrush="#94A3B8"/>
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Row="2"
+                      RowDefinitions="Auto,Auto,Auto,Auto"
+                      RowSpacing="10">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Amount"
+                                   FontSize="12"
+                                   Foreground="#475569"/>
+                        <TextBox MinHeight="40"
+                                 PlaceholderText="0.00"
+                                 Text="{Binding TransactionAmount}"
+                                 Background="White"
+                                 Foreground="#111827"
+                                 BorderBrush="#94A3B8"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1"
+                                Spacing="4">
+                        <TextBlock Text="{Binding FromAccountLabel}"
+                                   FontSize="12"
+                                   Foreground="#475569"/>
+                        <ComboBox MinHeight="40"
+                                  ItemsSource="{Binding FromAccountOptions}"
+                                  SelectedItem="{Binding SelectedFromAccount}"
+                                  Background="White"
+                                  Foreground="#111827"
+                                  BorderBrush="#94A3B8">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="api:AccountSummary">
+                                    <TextBlock Text="{Binding Name}"
+                                               Foreground="#111827"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="2"
+                                Spacing="4">
+                        <TextBlock Text="{Binding ToAccountLabel}"
+                                   FontSize="12"
+                                   Foreground="#475569"/>
+                        <ComboBox MinHeight="40"
+                                  ItemsSource="{Binding ToAccountOptions}"
+                                  SelectedItem="{Binding SelectedToAccount}"
+                                  Background="White"
+                                  Foreground="#111827"
+                                  BorderBrush="#94A3B8">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="api:AccountSummary">
+                                    <TextBlock Text="{Binding Name}"
+                                               Foreground="#111827"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="3"
+                                Spacing="4">
+                        <TextBlock Text="Memo"
+                                   FontSize="12"
+                                   Foreground="#475569"/>
+                        <TextBox MinHeight="40"
+                                 PlaceholderText="Optional description"
+                                 Text="{Binding TransactionMemo}"
+                                 Background="White"
+                                 Foreground="#111827"
+                                 BorderBrush="#94A3B8"/>
+                    </StackPanel>
+                </Grid>
+
+                <Button Grid.Row="3"
+                        MinHeight="42"
+                        HorizontalAlignment="Stretch"
+                        Command="{Binding PostManualTransactionCommand}"
+                        Content="{Binding PostTransactionButtonText}"
+                        Background="#2563EB"
+                        Foreground="White"/>
+            </Grid>
+
+            <Grid Grid.Column="1"
+                  RowDefinitions="Auto,Auto,*"
+                  RowSpacing="10">
+                <TextBlock Text="Account register"
+                           FontSize="17"
+                           FontWeight="SemiBold"
+                           Foreground="#0F172A"/>
+
+                <Grid Grid.Row="1"
+                      ColumnDefinitions="*,Auto"
+                      ColumnSpacing="10">
+                    <ComboBox MinHeight="40"
+                              ItemsSource="{Binding Accounts}"
+                              SelectedItem="{Binding SelectedRegisterAccount}"
+                              Background="White"
+                              Foreground="#111827"
+                              BorderBrush="#94A3B8">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="api:AccountSummary">
+                                <TextBlock Text="{Binding Name}"
+                                           Foreground="#111827"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button Grid.Column="1"
+                            MinHeight="40"
+                            MinWidth="100"
+                            Command="{Binding LoadRegisterCommand}"
+                            Content="Refresh"
+                            Background="White"
+                            Foreground="#0F172A"
+                            BorderBrush="#94A3B8"/>
+                </Grid>
+
+                <Grid Grid.Row="2"
+                      RowDefinitions="38,*">
+                    <Border Background="#E9EEF5"
+                            BorderBrush="#CBD5E1"
+                            BorderThickness="1">
+                        <Grid Margin="10,0"
+                              ColumnDefinitions="92,2*,90,90,2*"
+                              ColumnSpacing="10">
+                            <TextBlock Text="Date" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                            <TextBlock Grid.Column="1" Text="Memo" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                            <TextBlock Grid.Column="2" Text="Money in" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                            <TextBlock Grid.Column="3" Text="Money out" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                            <TextBlock Grid.Column="4" Text="Category / account" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                        </Grid>
+                    </Border>
+
+                    <ListBox Grid.Row="1"
+                             MinHeight="370"
+                             Background="White"
+                             Foreground="#111827"
+                             BorderBrush="#CBD5E1"
+                             ItemsSource="{Binding RegisterEntries}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="api:AccountRegisterEntrySummary">
+                                <Grid Margin="10,8"
+                                      ColumnDefinitions="92,2*,90,90,2*"
+                                      ColumnSpacing="10">
+                                    <TextBlock Text="{Binding EntryDate}" Foreground="#334155"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Memo}" TextTrimming="CharacterEllipsis" Foreground="#111827"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding Debit, StringFormat='{}{0:C}'}" Foreground="#23613D"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding Credit, StringFormat='{}{0:C}'}" Foreground="#8A3D3D"/>
+                                    <TextBlock Grid.Column="4" Text="{Binding OtherAccounts}" TextTrimming="CharacterEllipsis" Foreground="#475569"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

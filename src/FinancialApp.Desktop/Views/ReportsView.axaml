@@ -1,0 +1,143 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:FinancialApp.Desktop.ViewModels"
+             x:Class="FinancialApp.Desktop.Views.ReportsView"
+             x:DataType="vm:MainWindowViewModel">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <Grid Margin="32,0,32,32"
+              RowDefinitions="Auto,Auto,*"
+              RowSpacing="14"
+              MinHeight="490">
+            <Grid ColumnDefinitions="220,150,150,Auto,Auto"
+                  ColumnSpacing="10">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Report"
+                               FontSize="12"
+                               Foreground="#475569"/>
+                    <ComboBox MinHeight="40"
+                              ItemsSource="{Binding ReportTypes}"
+                              SelectedItem="{Binding SelectedReport}"
+                              Background="White"
+                              Foreground="#111827"
+                              BorderBrush="#94A3B8"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="4">
+                    <TextBlock Text="Start date" FontSize="12" Foreground="#475569"/>
+                    <TextBox MinHeight="40"
+                             Text="{Binding ReportStartDate}"
+                             Background="White"
+                             Foreground="#111827"
+                             BorderBrush="#94A3B8"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="4">
+                    <TextBlock Text="End date" FontSize="12" Foreground="#475569"/>
+                    <TextBox MinHeight="40"
+                             Text="{Binding ReportEndDate}"
+                             Background="White"
+                             Foreground="#111827"
+                             BorderBrush="#94A3B8"/>
+                </StackPanel>
+                <Button Grid.Column="3"
+                        MinHeight="40"
+                        MinWidth="105"
+                        Margin="0,20,0,0"
+                        Command="{Binding LoadReportCommand}"
+                        Content="Run report"
+                        Background="#2563EB"
+                        Foreground="White"/>
+                <Button Grid.Column="4"
+                        MinHeight="40"
+                        MinWidth="105"
+                        Margin="0,20,0,0"
+                        Command="{Binding ExportReportCommand}"
+                        Content="Export CSV"
+                        Background="White"
+                        Foreground="#0F172A"
+                        BorderBrush="#94A3B8"/>
+            </Grid>
+
+            <Grid Grid.Row="1"
+                  ColumnDefinitions="*,*,*"
+                  ColumnSpacing="12">
+                <Border Padding="14"
+                        Background="White"
+                        BorderBrush="#CBD5E1"
+                        BorderThickness="1"
+                        CornerRadius="6">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{Binding ReportPrimaryLabel}" FontSize="12" Foreground="#475569"/>
+                        <TextBlock Text="{Binding ReportPrimaryAmount, StringFormat='{}{0:C}'}"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="#0F172A"/>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="1"
+                        Padding="14"
+                        Background="White"
+                        BorderBrush="#CBD5E1"
+                        BorderThickness="1"
+                        CornerRadius="6">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{Binding ReportSecondaryLabel}" FontSize="12" Foreground="#475569"/>
+                        <TextBlock Text="{Binding ReportSecondaryAmount, StringFormat='{}{0:C}'}"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="#0F172A"/>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="2"
+                        Padding="14"
+                        Background="#E8F3EE"
+                        BorderBrush="#8FB8A3"
+                        BorderThickness="1"
+                        CornerRadius="6">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{Binding ReportResultLabel}" FontSize="12" Foreground="#365A49"/>
+                        <TextBlock Text="{Binding ReportResultAmount, StringFormat='{}{0:C}'}"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="#153D2A"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Grid Grid.Row="2"
+                  RowDefinitions="38,*">
+                <Border Background="#E9EEF5"
+                        BorderBrush="#CBD5E1"
+                        BorderThickness="1">
+                    <Grid Margin="12,0"
+                          ColumnDefinitions="160,*,140"
+                          ColumnSpacing="14">
+                        <TextBlock Text="Section" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                        <TextBlock Grid.Column="1" Text="Account" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                        <TextBlock Grid.Column="2" Text="Amount" HorizontalAlignment="Right" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                    </Grid>
+                </Border>
+                <ListBox Grid.Row="1"
+                         MinHeight="310"
+                         Background="White"
+                         Foreground="#111827"
+                         BorderBrush="#CBD5E1"
+                         ItemsSource="{Binding ReportRows}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ReportDisplayRow">
+                            <Grid Margin="12,8"
+                                  ColumnDefinitions="160,*,140"
+                                  ColumnSpacing="14">
+                                <TextBlock Text="{Binding Section}" Foreground="#475569"/>
+                                <TextBlock Grid.Column="1" Text="{Binding AccountName}" FontWeight="SemiBold" Foreground="#111827"/>
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding Amount, StringFormat='{}{0:C}'}"
+                                           HorizontalAlignment="Right"
+                                           Foreground="#334155"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

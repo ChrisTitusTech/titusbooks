@@ -171,6 +171,38 @@ public sealed class TitusBooksApiClientTests
         Assert.Equal("Office Supplies", entry.OtherAccounts);
     }
 
+    [Fact]
+    public async Task GetProfitAndLossAsync_ReturnsReport()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            Assert.Equal(HttpMethod.Get, request.Method);
+            Assert.Equal(
+                "/organizations/11111111-1111-1111-1111-111111111111/reports/profit-and-loss",
+                request.RequestUri?.AbsolutePath);
+            Assert.Equal("?startDate=2026-01-01&endDate=2026-06-30", request.RequestUri?.Query);
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"startDate":"2026-01-01","endDate":"2026-06-30","income":[],"expenses":[],"totalIncome":500.00,"totalExpenses":75.00,"netIncome":425.00}""")
+            };
+        }))
+        {
+            BaseAddress = new Uri("http://127.0.0.1:5000")
+        };
+        var client = new TitusBooksApiClient(httpClient);
+
+        var report = await client.GetProfitAndLossAsync(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            new DateOnly(2026, 1, 1),
+            new DateOnly(2026, 6, 30));
+
+        Assert.Equal(500m, report.TotalIncome);
+        Assert.Equal(75m, report.TotalExpenses);
+        Assert.Equal(425m, report.NetIncome);
+    }
+
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> handler;

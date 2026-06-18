@@ -6,6 +6,8 @@ This roadmap is designed for Codex-driven development. Each phase should be smal
 
 ## Phase 0: Repository Bootstrap
 
+**Status: Complete**
+
 ### Goal
 
 Create a clean, testable project foundation without implementing business features yet.
@@ -52,6 +54,8 @@ FinancialApp/
 
 ## Phase 1: API, Database, and Domain Foundation
 
+**Status: Complete**
+
 ### Goal
 
 Implement the API host, core database schema, and accounting domain model.
@@ -87,6 +91,8 @@ Implement the API host, core database schema, and accounting domain model.
 
 ## Phase 2: Company Setup and Accounts UI
 
+**Status: Complete**
+
 ### Goal
 
 Let the user create an organization and manage chart of accounts.
@@ -107,6 +113,8 @@ Let the user create an organization and manage chart of accounts.
 - App reloads organization/accounts from the API after restart.
 
 ## Phase 3: Manual Transactions
+
+**Status: Complete**
 
 ### Goal
 
@@ -133,6 +141,8 @@ Enable manual income and expense entry using double-entry accounting internally.
 
 ## Phase 4: Report MVP
 
+**Status: Complete and verified against the deployed API/PostgreSQL environment**
+
 ### Goal
 
 Add basic financial visibility before import complexity.
@@ -153,6 +163,8 @@ Add basic financial visibility before import complexity.
 - CSV export works with fake data.
 
 ## Phase 5: Generic CSV Import Framework
+
+**Status: Not started**
 
 ### Goal
 

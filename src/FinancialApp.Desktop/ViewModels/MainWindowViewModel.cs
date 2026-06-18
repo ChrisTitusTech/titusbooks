@@ -4,11 +4,15 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FinancialApp.Core.Api;
 using FinancialApp.Core.Application;
+using FinancialApp.Desktop.Services;
 
 namespace FinancialApp.Desktop.ViewModels;
 
 public sealed partial class MainWindowViewModel : ViewModelBase
 {
+    [ObservableProperty]
+    private NavigationPage currentPage = NavigationPage.Home;
+
     [ObservableProperty]
     private string apiHealthMessage = "API health has not been checked.";
 
@@ -54,7 +58,46 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private AccountSummary? selectedRegisterAccount;
 
+    [ObservableProperty]
+    private string selectedReport = "Profit and Loss";
+
+    [ObservableProperty]
+    private string reportStartDate = new DateOnly(DateTime.Today.Year, 1, 1)
+        .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    [ObservableProperty]
+    private string reportEndDate = DateOnly.FromDateTime(DateTime.Today)
+        .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    [ObservableProperty]
+    private string reportPrimaryLabel = "Total income";
+
+    [ObservableProperty]
+    private decimal reportPrimaryAmount;
+
+    [ObservableProperty]
+    private string reportSecondaryLabel = "Total expenses";
+
+    [ObservableProperty]
+    private decimal reportSecondaryAmount;
+
+    [ObservableProperty]
+    private string reportResultLabel = "Net income";
+
+    [ObservableProperty]
+    private decimal reportResultAmount;
+
+    [ObservableProperty]
+    private decimal dashboardIncome;
+
+    [ObservableProperty]
+    private decimal dashboardExpenses;
+
+    [ObservableProperty]
+    private decimal dashboardNetIncome;
+
     private readonly TitusBooksApiClient? apiClient;
+    private readonly IReportFileSaver? reportFileSaver;
     private int accountLoadVersion;
 
     public MainWindowViewModel()
@@ -62,19 +105,48 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
     }
 
-    public MainWindowViewModel(AppSettings settings, TitusBooksApiClient? apiClient = null)
+    public MainWindowViewModel(
+        AppSettings settings,
+        TitusBooksApiClient? apiClient = null,
+        IReportFileSaver? reportFileSaver = null)
     {
         this.apiClient = apiClient;
+        this.reportFileSaver = reportFileSaver;
         Title = settings.ApplicationName;
-        StatusMessage = "Company setup";
         DatabaseSummary = $"API target: {settings.Api.BaseUrl}";
     }
 
     public string Title { get; }
 
-    public string StatusMessage { get; }
-
     public string DatabaseSummary { get; }
+
+    public string PageTitle => CurrentPage switch
+    {
+        NavigationPage.Home => SelectedOrganization?.Name ?? "Home",
+        NavigationPage.Accounts => "Chart of accounts",
+        NavigationPage.Transactions => "Transactions",
+        NavigationPage.Reports => "Reports",
+        _ => "Company setup"
+    };
+
+    public string PageDescription => CurrentPage switch
+    {
+        NavigationPage.Home => "Your books at a glance.",
+        NavigationPage.Accounts => "Create and maintain the accounts used by your books.",
+        NavigationPage.Transactions => "Record money in, money out, and transfers between accounts.",
+        NavigationPage.Reports => "Review financial performance for a selected date range.",
+        _ => "Create a company and choose which set of books to work with."
+    };
+
+    public bool IsHomePage => CurrentPage == NavigationPage.Home;
+
+    public bool IsSetupPage => CurrentPage == NavigationPage.Setup;
+
+    public bool IsAccountsPage => CurrentPage == NavigationPage.Accounts;
+
+    public bool IsTransactionsPage => CurrentPage == NavigationPage.Transactions;
+
+    public bool IsReportsPage => CurrentPage == NavigationPage.Reports;
 
     public ObservableCollection<OrganizationSummary> Organizations { get; } = [];
 
@@ -101,6 +173,21 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<AccountSummary> ToAccountOptions { get; } = [];
 
     public ObservableCollection<AccountRegisterEntrySummary> RegisterEntries { get; } = [];
+
+    public ObservableCollection<ReportDisplayRow> ReportRows { get; } = [];
+
+    public ObservableCollection<AccountReportTotalSummary> DashboardIncomeSources { get; } = [];
+
+    public ObservableCollection<AccountReportTotalSummary> DashboardExpenseCategories { get; } = [];
+
+    public string DashboardPeriod => $"{DateTime.Today:yyyy} year to date";
+
+    public IReadOnlyList<string> ReportTypes { get; } =
+    [
+        "Profit and Loss",
+        "Expenses by Category",
+        "Income by Source"
+    ];
 
     public string FromAccountLabel => SelectedTransactionType switch
     {
@@ -130,9 +217,65 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private async Task NavigateAsync(string page)
+    {
+        if (Enum.TryParse<NavigationPage>(page, ignoreCase: true, out var targetPage))
+        {
+            CurrentPage = targetPage;
+            if (targetPage == NavigationPage.Home)
+            {
+                await LoadDashboardAsync();
+            }
+        }
+    }
+
+    [RelayCommand]
     public async Task InitializeAsync()
     {
         await LoadOrganizationsAsync();
+        await LoadDashboardAsync();
+    }
+
+    private async Task LoadDashboardAsync()
+    {
+        DashboardIncomeSources.Clear();
+        DashboardExpenseCategories.Clear();
+        DashboardIncome = 0;
+        DashboardExpenses = 0;
+        DashboardNetIncome = 0;
+
+        if (apiClient is null || SelectedOrganization is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var endDate = DateOnly.FromDateTime(DateTime.Today);
+            var startDate = new DateOnly(endDate.Year, 1, 1);
+            var report = await apiClient.GetProfitAndLossAsync(
+                SelectedOrganization.Id,
+                startDate,
+                endDate);
+
+            DashboardIncome = report.TotalIncome;
+            DashboardExpenses = report.TotalExpenses;
+            DashboardNetIncome = report.NetIncome;
+
+            foreach (var account in report.Income.OrderByDescending(account => account.Amount).Take(5))
+            {
+                DashboardIncomeSources.Add(account);
+            }
+
+            foreach (var account in report.Expenses.OrderByDescending(account => account.Amount).Take(5))
+            {
+                DashboardExpenseCategories.Add(account);
+            }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            WorkspaceMessage = exception.Message;
+        }
     }
 
     [RelayCommand]
@@ -449,8 +592,85 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
+    public async Task LoadReportAsync()
+    {
+        if (!TryGetReportRequest(out var organizationId, out var startDate, out var endDate))
+        {
+            return;
+        }
+
+        try
+        {
+            ReportRows.Clear();
+
+            switch (SelectedReport)
+            {
+                case "Expenses by Category":
+                    DisplayBreakdown(
+                        await apiClient!.GetExpensesByCategoryAsync(organizationId, startDate, endDate),
+                        "Expenses");
+                    break;
+                case "Income by Source":
+                    DisplayBreakdown(
+                        await apiClient!.GetIncomeBySourceAsync(organizationId, startDate, endDate),
+                        "Income");
+                    break;
+                default:
+                    DisplayProfitAndLoss(
+                        await apiClient!.GetProfitAndLossAsync(organizationId, startDate, endDate));
+                    break;
+            }
+
+            WorkspaceMessage = ReportRows.Count == 0
+                ? "The selected report has no activity for this date range."
+                : $"{SelectedReport} loaded.";
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            WorkspaceMessage = exception.Message;
+        }
+    }
+
+    [RelayCommand]
+    public async Task ExportReportAsync()
+    {
+        if (!TryGetReportRequest(out var organizationId, out var startDate, out var endDate))
+        {
+            return;
+        }
+
+        if (reportFileSaver is null)
+        {
+            WorkspaceMessage = "Report file export is not available.";
+            return;
+        }
+
+        try
+        {
+            var reportName = SelectedReport switch
+            {
+                "Expenses by Category" => "expenses-by-category",
+                "Income by Source" => "income-by-source",
+                _ => "profit-and-loss"
+            };
+            var csv = await apiClient!.GetReportCsvAsync(organizationId, reportName, startDate, endDate);
+            var saved = await reportFileSaver.SaveAsync(
+                $"{reportName}-{startDate:yyyy-MM-dd}-to-{endDate:yyyy-MM-dd}.csv",
+                csv);
+
+            WorkspaceMessage = saved ? "Report exported." : "Report export canceled.";
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or IOException)
+        {
+            WorkspaceMessage = exception.Message;
+        }
+    }
+
     partial void OnSelectedOrganizationChanged(OrganizationSummary? value)
     {
+        OnPropertyChanged(nameof(PageTitle));
+
         if (value is null)
         {
             ClearAccountState();
@@ -458,6 +678,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
 
         _ = LoadAccountsForOrganizationAsync(value);
+        _ = LoadDashboardAsync();
+    }
+
+    partial void OnCurrentPageChanged(NavigationPage value)
+    {
+        OnPropertyChanged(nameof(PageTitle));
+        OnPropertyChanged(nameof(PageDescription));
+        OnPropertyChanged(nameof(IsHomePage));
+        OnPropertyChanged(nameof(IsSetupPage));
+        OnPropertyChanged(nameof(IsAccountsPage));
+        OnPropertyChanged(nameof(IsTransactionsPage));
+        OnPropertyChanged(nameof(IsReportsPage));
     }
 
     partial void OnSelectedTransactionTypeChanged(string value)
@@ -508,7 +740,85 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         SelectedFromAccount = null;
         SelectedToAccount = null;
         SelectedRegisterAccount = null;
+        ClearReport();
         RefreshTransactionAccountOptions();
+    }
+
+    private bool TryGetReportRequest(
+        out Guid organizationId,
+        out DateOnly startDate,
+        out DateOnly endDate)
+    {
+        organizationId = SelectedOrganization?.Id ?? Guid.Empty;
+        startDate = default;
+        endDate = default;
+
+        if (apiClient is null || SelectedOrganization is null)
+        {
+            WorkspaceMessage = "Select an organization first.";
+            return false;
+        }
+
+        if (!DateOnly.TryParse(ReportStartDate, CultureInfo.InvariantCulture, out startDate)
+            || !DateOnly.TryParse(ReportEndDate, CultureInfo.InvariantCulture, out endDate))
+        {
+            WorkspaceMessage = "Enter report dates as YYYY-MM-DD.";
+            return false;
+        }
+
+        if (startDate > endDate)
+        {
+            WorkspaceMessage = "Report start date must be on or before end date.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private void DisplayProfitAndLoss(ProfitAndLossReportSummary report)
+    {
+        foreach (var account in report.Income)
+        {
+            ReportRows.Add(new ReportDisplayRow("Income", account.AccountName, account.Amount));
+        }
+
+        foreach (var account in report.Expenses)
+        {
+            ReportRows.Add(new ReportDisplayRow("Expense", account.AccountName, account.Amount));
+        }
+
+        ReportPrimaryLabel = "Total income";
+        ReportPrimaryAmount = report.TotalIncome;
+        ReportSecondaryLabel = "Total expenses";
+        ReportSecondaryAmount = report.TotalExpenses;
+        ReportResultLabel = "Net income";
+        ReportResultAmount = report.NetIncome;
+    }
+
+    private void DisplayBreakdown(
+        AccountBreakdownReportSummary report,
+        string section)
+    {
+        foreach (var account in report.Accounts)
+        {
+            ReportRows.Add(new ReportDisplayRow(section, account.AccountName, account.Amount));
+        }
+
+        var largestAccount = report.Accounts.MaxBy(account => account.Amount);
+        ReportPrimaryLabel = largestAccount is null ? "Largest account" : $"Largest: {largestAccount.AccountName}";
+        ReportPrimaryAmount = largestAccount?.Amount ?? 0;
+        ReportSecondaryLabel = report.Accounts.Count == 0 ? "Average per account" : $"{report.Accounts.Count} accounts";
+        ReportSecondaryAmount = report.Accounts.Count == 0 ? 0 : report.Total / report.Accounts.Count;
+        ReportResultLabel = "Report total";
+        ReportResultAmount = report.Total;
+    }
+
+    private void ClearReport()
+    {
+        ReportRows.Clear();
+        ReportPrimaryAmount = 0;
+        ReportSecondaryAmount = 0;
+        ReportResultAmount = 0;
     }
 
     private void RefreshTransactionAccountOptions()
