@@ -1,0 +1,8 @@
+Date,Time,TimeZone,Name,Type,Status,Currency,Gross,Fee,Net,Transaction ID,Reference Txn ID,Item Title,Balance Impact
+06/01/2026,10:15:30,CDT,Example Customer,Express Checkout Payment,Completed,USD,100.00,-3.49,96.51,PAY-001,,Fake service,Credit
+06/02/2026,11:00:00,CDT,Example Customer,Payment Refund,Completed,USD,-25.00,0.00,-25.00,REF-001,PAY-001,Fake refund,Debit
+06/03/2026,12:00:00,CDT,,Bank Transfer to Bank,Completed,USD,-50.00,0.00,-50.00,TRN-001,,,Debit
+06/04/2026,13:00:00,CDT,Pending Customer,Express Checkout Payment,Pending,USD,12.00,0.00,12.00,PENDING-001,,,Credit
+06/05/2026,14:00:00,CDT,Authorization,General Authorization,Completed,USD,20.00,0.00,20.00,MEMO-001,,,Memo
+06/05/2026,14:05:00,CDT,Authorization,Reversal of General Account Hold,Completed,USD,20.00,0.00,20.00,HOLD-001,MEMO-001,,Credit
+06/06/2026,15:00:00,CDT,Bad Split,Express Checkout Payment,Completed,USD,10.00,-1.00,8.00,BAD-001,,,Credit

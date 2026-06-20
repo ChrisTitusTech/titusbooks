@@ -213,6 +213,8 @@ Create a saved mapping/profile for Bank of America transaction exports.
 
 ## Phase 7: PayPal CSV Import
 
+**Status: Complete**
+
 ### Goal
 
 Handle PayPal CSV exports and common PayPal accounting cases.

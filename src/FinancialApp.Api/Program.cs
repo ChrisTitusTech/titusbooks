@@ -27,6 +27,7 @@ if (!string.IsNullOrWhiteSpace(postgresConnectionString))
     builder.Services.AddScoped<AccountingService>();
     builder.Services.AddScoped<FinancialReportService>();
     builder.Services.AddScoped<GenericCsvParser>();
+    builder.Services.AddScoped<PayPalCsvParser>();
     builder.Services.AddScoped<CsvImportService>();
 }
 

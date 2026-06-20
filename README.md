@@ -2,7 +2,7 @@
 
 TitusBooks is a multi-platform bookkeeping desktop app on an Avalonia + ASP.NET Core + .NET 10 + PostgreSQL foundation.
 
-Phases 0 through 5 of the roadmap are implemented locally. TitusBooks currently supports organization and account setup, manual expense/income/transfer posting, account registers, financial reports, CSV report export, and generic CSV transaction staging with column mapping and duplicate detection.
+Phases 0 through 7 of the roadmap are implemented locally. TitusBooks currently supports organization and account setup, manual expense/income/transfer posting, account registers, financial reports, CSV report export, generic and Bank of America CSV staging, and PayPal CSV normalization with gross/fee/net handling.
 
 ## Files
 
@@ -67,7 +67,7 @@ GET /organizations/{organizationId}/reports/income-by-source
 GET /organizations/{organizationId}/reports/{reportName}/csv
 ```
 
-Generic CSV import endpoints:
+CSV import endpoints:
 
 ```text
 POST /imports/csv/headers
@@ -77,6 +77,14 @@ GET  /organizations/{organizationId}/imports/transactions
 ```
 
 CSV imports remain in staging and never post journal entries automatically.
+
+The desktop import screen provides these profiles:
+
+- `Generic CSV` for manually mapped files.
+- `Bank of America` for statement exports with signed amounts and optional running balances.
+- `PayPal` for provider-aware normalization of completed payments, refunds, transfers, fees, and currency conversions.
+
+PayPal imports preserve gross, fee, net, transaction IDs, reference IDs, type, status, time, timezone, and the raw source row. Pending, memo-only, authorization, and account-hold rows are excluded from staging. PayPal fees are normalized to positive expense amounts while the original signed value remains available in the raw payload.
 
 ## Database Migrations
 
@@ -108,7 +116,7 @@ Or, after filling in `.env`:
 dotnet run --project src/FinancialApp.Migrations/FinancialApp.Migrations.csproj
 ```
 
-The baseline migration creates organizations, accounts, import batches, imported transactions, journal entries, journal lines, categorization rules, and reconciliations.
+The baseline migration creates organizations, accounts, import batches, imported transactions, journal entries, journal lines, categorization rules, and reconciliations. Later migrations add import fingerprint uniqueness, running balances, and PayPal-specific normalized fields.
 
 ## Server Publish
 
@@ -127,6 +135,15 @@ Copy the published files to the server:
 ```bash
 rsync -av artifacts/publish/FinancialApp.Api/ titus@10.0.0.80:/opt/titusbooks/api/
 ```
+
+Apply all pending migrations before restarting an API deployment when automatic startup migrations are disabled:
+
+```bash
+TITUSBOOKS_CONNECTIONSTRING="Host=127.0.0.1;Port=5432;Database=titusbooks;Username=titus;Password=..." \
+dotnet run --project src/FinancialApp.Migrations/FinancialApp.Migrations.csproj
+```
+
+For Phase 7, migration `004_PayPalImportFields.sql` must be applied before importing PayPal rows.
 
 The server-side systemd service should set:
 

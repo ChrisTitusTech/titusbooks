@@ -8,24 +8,29 @@ namespace FinancialApp.Importers;
 public sealed class CsvImportService
 {
     private readonly GenericCsvParser parser;
+    private readonly PayPalCsvParser payPalParser;
     private readonly IImportRepository repository;
 
-    public CsvImportService(GenericCsvParser parser, IImportRepository repository)
+    public CsvImportService(
+        GenericCsvParser parser,
+        IImportRepository repository,
+        PayPalCsvParser? payPalParser = null)
     {
         this.parser = parser;
         this.repository = repository;
+        this.payPalParser = payPalParser ?? new PayPalCsvParser();
     }
 
     public CsvImportPreview Preview(CsvImportRequest request)
     {
-        return parser.Parse(request);
+        return Parse(request);
     }
 
     public async Task<CsvImportResult> ImportAsync(
         CsvImportRequest request,
         CancellationToken cancellationToken = default)
     {
-        var preview = parser.Parse(request);
+        var preview = Parse(request);
         var validTransactions = preview.Rows
             .Where(row => row.Transaction is not null)
             .Select(row => row.Transaction!)
@@ -60,7 +65,8 @@ public sealed class CsvImportService
                 null,
                 0,
                 duplicateCount,
-                preview.ErrorCount);
+                preview.ErrorCount,
+                preview.SkippedCount);
         }
 
         var batchId = Guid.NewGuid();
@@ -76,7 +82,18 @@ public sealed class CsvImportService
             batchId,
             pendingTransactions.Count,
             duplicateCount,
-            preview.ErrorCount);
+            preview.ErrorCount,
+            preview.SkippedCount);
+    }
+
+    private CsvImportPreview Parse(CsvImportRequest request)
+    {
+        return string.Equals(
+            request.Source,
+            CsvImportProfiles.PayPalName,
+            StringComparison.OrdinalIgnoreCase)
+            ? payPalParser.Parse(request)
+            : parser.Parse(request);
     }
 
     private static ImportBatch CreateBatch(
@@ -96,7 +113,8 @@ public sealed class CsvImportService
             {
                 preview.Headers,
                 Mapping = request.Mapping,
-                RowCount = preview.Rows.Count
+                RowCount = preview.Rows.Count,
+                preview.SkippedCount
             })
         };
     }

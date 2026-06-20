@@ -6,7 +6,8 @@ public sealed record CsvImportPreviewResponse(
     IReadOnlyList<string> Headers,
     IReadOnlyList<CsvImportRowResponse> Rows,
     int ValidCount,
-    int ErrorCount)
+    int ErrorCount,
+    int SkippedCount)
 {
     public static CsvImportPreviewResponse FromPreview(CsvImportPreview preview)
     {
@@ -14,6 +15,7 @@ public sealed record CsvImportPreviewResponse(
             preview.Headers,
             preview.Rows.Select(CsvImportRowResponse.FromRow).ToList(),
             preview.ValidCount,
-            preview.ErrorCount);
+            preview.ErrorCount,
+            preview.SkippedCount);
     }
 }
