@@ -10,7 +10,9 @@ public sealed record CsvColumnMappingRequest(
     string? CreditColumn = null,
     string? SourceTransactionIdColumn = null,
     string? CurrencyColumn = null,
-    string DefaultCurrency = "USD")
+    string DefaultCurrency = "USD",
+    string? BalanceColumn = null,
+    bool SkipBalanceOnlyRows = false)
 {
     public CsvColumnMapping ToMapping()
     {
@@ -22,6 +24,8 @@ public sealed record CsvColumnMappingRequest(
             CreditColumn,
             SourceTransactionIdColumn,
             CurrencyColumn,
-            DefaultCurrency);
+            DefaultCurrency,
+            BalanceColumn,
+            SkipBalanceOnlyRows);
     }
 }

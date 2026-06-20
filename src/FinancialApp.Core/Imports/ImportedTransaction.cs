@@ -20,6 +20,8 @@ public sealed record ImportedTransaction
 
     public required decimal Amount { get; init; }
 
+    public decimal? Balance { get; init; }
+
     public string Currency { get; init; } = "USD";
 
     public ImportedTransactionStatus Status { get; init; } = ImportedTransactionStatus.Pending;

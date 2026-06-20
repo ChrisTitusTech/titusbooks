@@ -9,6 +9,7 @@ public sealed record ImportedTransactionResponse(
     DateOnly PostedDate,
     string Description,
     decimal Amount,
+    decimal? Balance,
     string Currency,
     string Status)
 {
@@ -21,6 +22,7 @@ public sealed record ImportedTransactionResponse(
             transaction.PostedDate,
             transaction.Description,
             transaction.Amount,
+            transaction.Balance,
             transaction.Currency,
             transaction.Status.ToString().ToLowerInvariant());
     }

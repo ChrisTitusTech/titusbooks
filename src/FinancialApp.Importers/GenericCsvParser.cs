@@ -17,7 +17,11 @@ public sealed class GenericCsvParser
         "MM/dd/yyyy",
         "M/d/yy",
         "MM/dd/yy",
-        "yyyyMMdd"
+        "yyyyMMdd",
+        "M/d/yyyy h:mm tt",
+        "MM/dd/yyyy hh:mm tt",
+        "M/d/yyyy H:mm:ss",
+        "MM/dd/yyyy HH:mm:ss"
     ];
 
     public CsvImportPreview Parse(CsvImportRequest request)
@@ -27,11 +31,12 @@ public sealed class GenericCsvParser
         using var reader = new StringReader(request.CsvContent);
         using var parser = CreateParser(reader);
 
-        var headers = ReadHeaderFields(parser);
+        var header = ReadHeaderFields(parser, request.Mapping);
+        var headers = header.Fields;
         ValidateHeaders(headers, request.Mapping);
 
         var rows = new List<CsvImportRow>();
-        var rowNumber = 1;
+        var rowNumber = header.RowNumber;
         while (!parser.EndOfData)
         {
             rowNumber++;
@@ -49,6 +54,11 @@ public sealed class GenericCsvParser
                 }
 
                 var rawValues = BuildRawValues(headers, fields);
+                if (ShouldSkipBalanceOnlyRow(rawValues, request.Mapping))
+                {
+                    continue;
+                }
+
                 rows.Add(ParseRow(request, rowNumber, rawValues));
             }
             catch (MalformedLineException exception)
@@ -71,7 +81,7 @@ public sealed class GenericCsvParser
         using var reader = new StringReader(csvContent);
         using var parser = CreateParser(reader);
 
-        var headers = ReadHeaderFields(parser);
+        var headers = ReadHeaderFields(parser).Fields;
         ValidateHeaderNames(headers);
         return headers;
     }
@@ -88,19 +98,109 @@ public sealed class GenericCsvParser
         return parser;
     }
 
-    private static string[] ReadHeaderFields(TextFieldParser parser)
+    private static CsvHeader ReadHeaderFields(
+        TextFieldParser parser,
+        CsvColumnMapping? mapping = null)
     {
-        try
+        var rowNumber = 0;
+        while (!parser.EndOfData)
         {
-            return parser.ReadFields()?.Select(header => header.Trim()).ToArray()
-                ?? throw new InvalidOperationException("CSV file does not contain a header row.");
+            rowNumber++;
+            try
+            {
+                var fields = parser.ReadFields()?.Select(header => header.Trim()).ToArray() ?? [];
+                if (mapping is null
+                    && rowNumber == 1
+                    && fields.Length > 0
+                    && fields.All(field => !string.IsNullOrWhiteSpace(field)))
+                {
+                    return new CsvHeader(fields, rowNumber);
+                }
+
+                if (mapping is not null
+                    && rowNumber == 1
+                    && ContainsMappedHeader(fields, mapping.DateColumn)
+                    && ContainsMappedHeader(
+                        fields,
+                        mapping.AmountColumn,
+                        mapping.DebitColumn,
+                        mapping.CreditColumn))
+                {
+                    return new CsvHeader(fields, rowNumber);
+                }
+
+                if (IsHeaderRow(fields, mapping))
+                {
+                    return new CsvHeader(fields, rowNumber);
+                }
+            }
+            catch (MalformedLineException exception)
+            {
+                throw new InvalidOperationException(
+                    $"Malformed CSV header: {exception.Message}",
+                    exception);
+            }
         }
-        catch (MalformedLineException exception)
+
+        throw new InvalidOperationException("CSV file does not contain a recognizable header row.");
+    }
+
+    private static bool IsHeaderRow(
+        IReadOnlyList<string> fields,
+        CsvColumnMapping? mapping)
+    {
+        if (fields.Count == 0 || fields.Any(string.IsNullOrWhiteSpace))
         {
-            throw new InvalidOperationException(
-                $"Malformed CSV header: {exception.Message}",
-                exception);
+            return false;
         }
+
+        if (mapping is not null)
+        {
+            var requiredColumns = new[]
+            {
+                mapping.DateColumn,
+                mapping.DescriptionColumn,
+                mapping.AmountColumn,
+                mapping.DebitColumn,
+                mapping.CreditColumn
+            }.Where(column => !string.IsNullOrWhiteSpace(column));
+            return requiredColumns.All(column =>
+                fields.Contains(column!, StringComparer.OrdinalIgnoreCase));
+        }
+
+        var hasDate = ContainsAny(fields, "Date", "Posted Date", "Posting Date");
+        var hasDescription = ContainsAny(fields, "Description", "Payee", "Memo", "Name", "Details");
+        var hasAmount = ContainsAny(
+            fields,
+            "Amount",
+            "Transaction Amount",
+            "Signed Amount",
+            "Debit",
+            "Credit",
+            "Withdrawal",
+            "Deposit",
+            "Net",
+            "Value");
+        return hasDate && hasDescription && hasAmount;
+    }
+
+    private static bool ContainsAny(
+        IReadOnlyList<string> fields,
+        params string[] candidates)
+    {
+        return fields.Any(field =>
+            candidates.Any(candidate =>
+                string.Equals(field, candidate, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool ContainsMappedHeader(
+        IReadOnlyList<string> fields,
+        params string?[] candidates)
+    {
+        return candidates
+            .Where(candidate => !string.IsNullOrWhiteSpace(candidate))
+            .Any(candidate =>
+                fields.Contains(candidate!, StringComparer.OrdinalIgnoreCase));
     }
 
     private static CsvImportRow ParseRow(
@@ -114,6 +214,7 @@ public sealed class GenericCsvParser
             var description = GetRequiredValue(rawValues, request.Mapping.DescriptionColumn).Trim();
             var postedDate = ParseDate(dateText);
             var amount = ParseAmount(rawValues, request.Mapping);
+            var balance = ParseOptionalBalance(rawValues, request.Mapping);
             var currency = GetOptionalValue(rawValues, request.Mapping.CurrencyColumn)
                 ?? request.Mapping.DefaultCurrency;
             var normalizedCurrency = NormalizeCurrency(currency);
@@ -136,6 +237,7 @@ public sealed class GenericCsvParser
                 Description = description,
                 RawDescription = description,
                 Amount = amount,
+                Balance = balance,
                 Currency = normalizedCurrency,
                 Status = ImportedTransactionStatus.Pending,
                 Fingerprint = ImportFingerprint.Create(
@@ -185,10 +287,27 @@ public sealed class GenericCsvParser
         var normalized = value.Trim()
             .Replace("$", string.Empty, StringComparison.Ordinal)
             .Replace(",", string.Empty, StringComparison.Ordinal);
+        var isCredit = normalized.EndsWith(" CR", StringComparison.OrdinalIgnoreCase);
+        var isDebit = normalized.EndsWith(" DR", StringComparison.OrdinalIgnoreCase);
+        if (isCredit || isDebit)
+        {
+            normalized = normalized[..^3].TrimEnd();
+        }
+
+        if (normalized.EndsWith('-'))
+        {
+            normalized = $"-{normalized[..^1]}";
+        }
+
         var isParenthesized = normalized.StartsWith('(') && normalized.EndsWith(')');
         if (isParenthesized)
         {
             normalized = $"-{normalized[1..^1]}";
+        }
+
+        if (isDebit && !normalized.StartsWith('-'))
+        {
+            normalized = $"-{normalized}";
         }
 
         if (!decimal.TryParse(
@@ -206,6 +325,33 @@ public sealed class GenericCsvParser
     private static decimal ParseOptionalDecimal(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? 0 : ParseDecimal(value);
+    }
+
+    private static decimal? ParseOptionalBalance(
+        IReadOnlyDictionary<string, string?> rawValues,
+        CsvColumnMapping mapping)
+    {
+        var value = GetOptionalValue(rawValues, mapping.BalanceColumn);
+        return value is null ? null : ParseDecimal(value);
+    }
+
+    private static bool ShouldSkipBalanceOnlyRow(
+        IReadOnlyDictionary<string, string?> rawValues,
+        CsvColumnMapping mapping)
+    {
+        if (!mapping.SkipBalanceOnlyRows
+            || string.IsNullOrWhiteSpace(mapping.AmountColumn)
+            || string.IsNullOrWhiteSpace(mapping.BalanceColumn))
+        {
+            return false;
+        }
+
+        var amount = GetOptionalValue(rawValues, mapping.AmountColumn);
+        var balance = GetOptionalValue(rawValues, mapping.BalanceColumn);
+        var description = GetOptionalValue(rawValues, mapping.DescriptionColumn);
+        return amount is null
+            && balance is not null
+            && description?.StartsWith("Beginning balance", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     private static DateOnly ParseDate(string value)
@@ -332,7 +478,8 @@ public sealed class GenericCsvParser
             mapping.DebitColumn,
             mapping.CreditColumn,
             mapping.SourceTransactionIdColumn,
-            mapping.CurrencyColumn
+            mapping.CurrencyColumn,
+            mapping.BalanceColumn
         }.Where(column => !string.IsNullOrWhiteSpace(column));
 
         foreach (var column in mappedColumns)
@@ -362,4 +509,6 @@ public sealed class GenericCsvParser
                 $"CSV contains duplicate header '{duplicates[0]}'.");
         }
     }
+
+    private sealed record CsvHeader(string[] Fields, int RowNumber);
 }

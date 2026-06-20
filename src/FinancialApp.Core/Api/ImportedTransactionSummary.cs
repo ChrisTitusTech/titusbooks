@@ -7,5 +7,6 @@ public sealed record ImportedTransactionSummary(
     DateOnly PostedDate,
     string Description,
     decimal Amount,
+    decimal? Balance,
     string Currency,
     string Status);

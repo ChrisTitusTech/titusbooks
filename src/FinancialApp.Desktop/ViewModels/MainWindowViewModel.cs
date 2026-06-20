@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using FinancialApp.Core.Api;
 using FinancialApp.Core.Application;
 using FinancialApp.Desktop.Services;
+using FinancialApp.Importers;
 
 namespace FinancialApp.Desktop.ViewModels;
 
@@ -126,6 +127,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private string? selectedCurrencyColumn;
 
     [ObservableProperty]
+    private string? selectedBalanceColumn;
+
+    [ObservableProperty]
     private string defaultImportCurrency = "USD";
 
     [ObservableProperty]
@@ -138,6 +142,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IReportFileSaver? reportFileSaver;
     private readonly IImportFilePicker? importFilePicker;
     private string? importCsvContent;
+    private bool skipBalanceOnlyImportRows;
     private int accountLoadVersion;
     private int dashboardLoadVersion;
     private int importLoadVersion;
@@ -225,6 +230,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<ReportDisplayRow> ReportRows { get; } = [];
 
     public ObservableCollection<string> CsvHeaders { get; } = [];
+
+    public IReadOnlyList<string> ImportProfiles { get; } =
+        CsvImportProfiles.All.Select(profile => profile.Name).ToList();
 
     public ObservableCollection<CsvImportPreviewRowSummary> ImportPreviewRows { get; } = [];
 
@@ -587,7 +595,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (!decimal.TryParse(
             TransactionAmount,
             NumberStyles.Currency,
-            CultureInfo.InvariantCulture,
+            CultureInfo.CurrentCulture,
             out var amount)
             || amount <= 0)
         {
@@ -884,6 +892,22 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _ = LoadRegisterAsync();
     }
 
+    partial void OnImportSourceChanged(string value)
+    {
+        if (CsvHeaders.Count > 1)
+        {
+            try
+            {
+                ApplySuggestedMappings(CsvHeaders.Skip(1).ToList());
+                WorkspaceMessage = $"{value} profile applied.";
+            }
+            catch (InvalidOperationException exception)
+            {
+                WorkspaceMessage = exception.Message;
+            }
+        }
+    }
+
     private void ReplaceAccount(AccountSummary account)
     {
         var existingIndex = Accounts
@@ -1071,7 +1095,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 creditColumn,
                 NormalizeOptionalColumn(SelectedSourceIdColumn),
                 NormalizeOptionalColumn(SelectedCurrencyColumn),
-                defaultCurrency));
+                defaultCurrency,
+                NormalizeOptionalColumn(SelectedBalanceColumn),
+                skipBalanceOnlyImportRows));
         return true;
     }
 
@@ -1087,36 +1113,21 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private void ApplySuggestedMappings(IReadOnlyList<string> headers)
     {
-        SelectedDateColumn = FindHeader(headers, "date", "posted");
-        SelectedDescriptionColumn = FindHeader(headers, "description", "memo", "name", "details");
-        SelectedAmountColumn = FindHeader(headers, "amount", "value") ?? UnmappedColumn;
-        SelectedDebitColumn = SelectedAmountColumn == UnmappedColumn
-            ? FindHeader(headers, "debit", "withdrawal") ?? UnmappedColumn
-            : UnmappedColumn;
-        SelectedCreditColumn = SelectedAmountColumn == UnmappedColumn
-            ? FindHeader(headers, "credit", "deposit") ?? UnmappedColumn
-            : UnmappedColumn;
-        SelectedSourceIdColumn = FindHeader(headers, "transaction id", "id", "reference") ?? UnmappedColumn;
-        SelectedCurrencyColumn = FindHeader(headers, "currency") ?? UnmappedColumn;
+        var mapping = CsvImportProfiles.Get(ImportSource).CreateMapping(headers);
+        SelectedDateColumn = ToSelectedColumn(mapping.DateColumn);
+        SelectedDescriptionColumn = ToSelectedColumn(mapping.DescriptionColumn);
+        SelectedAmountColumn = mapping.AmountColumn ?? UnmappedColumn;
+        SelectedDebitColumn = mapping.DebitColumn ?? UnmappedColumn;
+        SelectedCreditColumn = mapping.CreditColumn ?? UnmappedColumn;
+        SelectedSourceIdColumn = mapping.SourceTransactionIdColumn ?? UnmappedColumn;
+        SelectedCurrencyColumn = mapping.CurrencyColumn ?? UnmappedColumn;
+        SelectedBalanceColumn = mapping.BalanceColumn ?? UnmappedColumn;
+        skipBalanceOnlyImportRows = mapping.SkipBalanceOnlyRows;
     }
 
-    private static string? FindHeader(
-        IEnumerable<string> headers,
-        params string[] candidates)
+    private static string ToSelectedColumn(string? column)
     {
-        var headerList = headers.ToList();
-        var exactMatch = headerList.FirstOrDefault(header =>
-            candidates.Any(candidate =>
-                string.Equals(header, candidate, StringComparison.OrdinalIgnoreCase)));
-        if (exactMatch is not null)
-        {
-            return exactMatch;
-        }
-
-        return headerList.FirstOrDefault(header =>
-            candidates
-                .Where(candidate => candidate.Length >= 4)
-                .Any(candidate => header.Contains(candidate, StringComparison.OrdinalIgnoreCase)));
+        return string.IsNullOrWhiteSpace(column) ? UnmappedColumn : column;
     }
 
     private static string? NormalizeOptionalColumn(string? column)

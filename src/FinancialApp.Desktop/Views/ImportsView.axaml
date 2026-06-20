@@ -28,14 +28,15 @@
                 </StackPanel>
                 <StackPanel Grid.Column="1"
                             Spacing="4">
-                    <TextBlock Text="Source name"
+                    <TextBlock Text="Import profile"
                                FontSize="12"
                                Foreground="#475569"/>
-                    <TextBox MinHeight="40"
-                             Text="{Binding ImportSource}"
-                             Background="White"
-                             Foreground="#111827"
-                             BorderBrush="#94A3B8"/>
+                    <ComboBox MinHeight="40"
+                              ItemsSource="{Binding ImportProfiles}"
+                              SelectedItem="{Binding ImportSource}"
+                              Background="White"
+                              Foreground="#111827"
+                              BorderBrush="#94A3B8"/>
                 </StackPanel>
                 <Button Grid.Column="2"
                         MinHeight="40"
@@ -113,7 +114,7 @@
             </Border>
 
             <Grid Grid.Row="2"
-                  ColumnDefinitions="*,*,*,*,Auto,Auto"
+                  ColumnDefinitions="*,*,*,*,*,Auto,Auto"
                   ColumnSpacing="10">
                 <StackPanel Spacing="4">
                     <TextBlock Text="Debit"
@@ -152,6 +153,18 @@
                 </StackPanel>
                 <StackPanel Grid.Column="3"
                             Spacing="4">
+                    <TextBlock Text="Balance (optional)"
+                               FontSize="11"
+                               Foreground="#64748B"/>
+                    <ComboBox MinHeight="38"
+                              ItemsSource="{Binding CsvHeaders}"
+                              SelectedItem="{Binding SelectedBalanceColumn}"
+                              Background="White"
+                              Foreground="#111827"
+                              BorderBrush="#94A3B8"/>
+                </StackPanel>
+                <StackPanel Grid.Column="4"
+                            Spacing="4">
                     <TextBlock Text="Default currency"
                                FontSize="11"
                                Foreground="#64748B"/>
@@ -162,7 +175,7 @@
                              Foreground="#111827"
                              BorderBrush="#94A3B8"/>
                 </StackPanel>
-                <Button Grid.Column="4"
+                <Button Grid.Column="5"
                         MinHeight="38"
                         MinWidth="100"
                         Margin="0,18,0,0"
@@ -171,7 +184,7 @@
                         Background="White"
                         Foreground="#172033"
                         BorderBrush="#94A3B8"/>
-                <Button Grid.Column="5"
+                <Button Grid.Column="6"
                         MinHeight="38"
                         MinWidth="100"
                         Margin="0,18,0,0"

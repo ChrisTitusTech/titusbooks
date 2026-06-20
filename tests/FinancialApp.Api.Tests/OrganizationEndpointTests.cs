@@ -368,11 +368,15 @@ public sealed class OrganizationEndpointTests
             "Generic CSV",
             "fake.csv",
             """
-            Date,Description,Amount
-            2026-06-01,Office supplies,-42.00
-            invalid,Bad date,10.00
+            Date,Description,Amount,Balance
+            2026-06-01,Office supplies,-42.00,958.00
+            invalid,Bad date,10.00,968.00
             """,
-            new CsvColumnMappingRequest("Date", "Description", AmountColumn: "Amount"));
+            new CsvColumnMappingRequest(
+                "Date",
+                "Description",
+                AmountColumn: "Amount",
+                BalanceColumn: "Balance"));
 
         var previewResponse = await client.PostAsJsonAsync(
             $"/organizations/{organizationId}/imports/csv/preview",
@@ -405,6 +409,7 @@ public sealed class OrganizationEndpointTests
         var transaction = Assert.Single(transactions);
         Assert.Equal("pending", transaction.Status);
         Assert.Equal(-42m, transaction.Amount);
+        Assert.Equal(958m, transaction.Balance);
     }
 
     [Fact]

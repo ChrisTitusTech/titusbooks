@@ -8,4 +8,6 @@ public sealed record CsvColumnMappingCommand(
     string? CreditColumn = null,
     string? SourceTransactionIdColumn = null,
     string? CurrencyColumn = null,
-    string DefaultCurrency = "USD");
+    string DefaultCurrency = "USD",
+    string? BalanceColumn = null,
+    bool SkipBalanceOnlyRows = false);

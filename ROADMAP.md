@@ -191,6 +191,8 @@ Build reusable import infrastructure before Bank of America or PayPal specializa
 
 ## Phase 6: Bank of America CSV Profile
 
+**Status: Complete**
+
 ### Goal
 
 Create a saved mapping/profile for Bank of America transaction exports.

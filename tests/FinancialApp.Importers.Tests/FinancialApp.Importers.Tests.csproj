@@ -22,4 +22,10 @@
     <ProjectReference Include="..\..\src\FinancialApp.Importers\FinancialApp.Importers.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Fixtures\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

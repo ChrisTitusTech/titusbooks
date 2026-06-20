@@ -1,0 +1,5 @@
+Posted Date,Reference Number,Payee,Address,Amount,Running Bal.
+06/01/2026,1000001,Coffee Shop,Fake Street,5.25-,"1,000.00"
+6/2/2026 8:30 AM,1000002,Client Deposit,,"1,250.00 CR","2,250.00"
+06/03/26,1000003,Office Supply Store,,42.10 DR,"2,207.90"
+invalid,1000004,Invalid Date Row,,10.00,"2,197.90"
