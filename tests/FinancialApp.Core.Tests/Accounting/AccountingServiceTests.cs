@@ -10,6 +10,8 @@ public sealed class AccountingServiceTests
     private readonly Guid creditCardAccountId = Guid.NewGuid();
     private readonly Guid expenseAccountId = Guid.NewGuid();
     private readonly Guid incomeAccountId = Guid.NewGuid();
+    private readonly Guid payPalAccountId = Guid.NewGuid();
+    private readonly Guid merchantFeeAccountId = Guid.NewGuid();
 
     [Fact]
     public async Task PostJournalEntryAsync_RejectsUnbalancedEntry()
@@ -202,6 +204,56 @@ public sealed class AccountingServiceTests
     }
 
     [Fact]
+    public async Task PostPayPalSaleAsync_PostsGrossFeeAndNetSplit()
+    {
+        var journalRepository = new InMemoryJournalEntryRepository();
+        var accountRepository = CreateAccountRepository();
+        var service = new AccountingService(journalRepository, accountRepository);
+        var sourceTransactionId = Guid.NewGuid();
+
+        var entry = await service.PostPayPalSaleAsync(new PayPalSale(
+            organizationId,
+            new DateOnly(2026, 6, 17),
+            payPalAccountId,
+            incomeAccountId,
+            merchantFeeAccountId,
+            100m,
+            3.49m,
+            96.51m,
+            "Fake PayPal sale",
+            sourceTransactionId));
+
+        Assert.True(entry.IsBalanced);
+        Assert.Equal(sourceTransactionId, entry.SourceImportedTransactionId);
+        Assert.Contains(entry.Lines, line =>
+            line.AccountId == payPalAccountId && line.Debit == 96.51m);
+        Assert.Contains(entry.Lines, line =>
+            line.AccountId == merchantFeeAccountId && line.Debit == 3.49m);
+        Assert.Contains(entry.Lines, line =>
+            line.AccountId == incomeAccountId && line.Credit == 100m);
+    }
+
+    [Fact]
+    public async Task PostPayPalSaleAsync_RejectsInvalidSplit()
+    {
+        var journalRepository = new InMemoryJournalEntryRepository();
+        var service = new AccountingService(journalRepository, CreateAccountRepository());
+
+        await Assert.ThrowsAsync<AccountingException>(() =>
+            service.PostPayPalSaleAsync(new PayPalSale(
+                organizationId,
+                new DateOnly(2026, 6, 17),
+                payPalAccountId,
+                incomeAccountId,
+                merchantFeeAccountId,
+                100m,
+                3m,
+                96m)));
+
+        Assert.Empty(journalRepository.Entries);
+    }
+
+    [Fact]
     public async Task PostExpenseAsync_RejectsZeroAmount()
     {
         var journalRepository = new InMemoryJournalEntryRepository();
@@ -226,7 +278,9 @@ public sealed class AccountingServiceTests
             CreateAccount(savingsAccountId, "Savings", AccountType.Asset, "Savings"),
             CreateAccount(creditCardAccountId, "Credit Card", AccountType.Liability, "Credit Card"),
             CreateAccount(expenseAccountId, "Office Supplies", AccountType.Expense),
-            CreateAccount(incomeAccountId, "Consulting Income", AccountType.Income)
+            CreateAccount(incomeAccountId, "Consulting Income", AccountType.Income),
+            CreateAccount(payPalAccountId, "PayPal Balance", AccountType.Asset, "PayPal"),
+            CreateAccount(merchantFeeAccountId, "Merchant Fees", AccountType.Expense)
         ]);
     }
 

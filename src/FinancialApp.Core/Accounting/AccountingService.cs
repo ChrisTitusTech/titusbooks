@@ -140,6 +140,63 @@ public sealed class AccountingService
             cancellationToken);
     }
 
+    public async Task<JournalEntry> PostPayPalSaleAsync(
+        PayPalSale sale,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(sale);
+        ValidatePositiveAmount(sale.GrossAmount);
+        ValidatePositiveAmount(sale.NetAmount);
+        if (sale.FeeAmount < 0)
+        {
+            throw new AccountingException("PayPal fee amount cannot be negative.");
+        }
+
+        if (sale.GrossAmount != sale.NetAmount + sale.FeeAmount)
+        {
+            throw new AccountingException("PayPal gross amount must equal net amount plus fee.");
+        }
+
+        var payPalAccount = await GetRequiredAccountAsync(
+            sale.OrganizationId,
+            sale.PayPalAccountId,
+            cancellationToken);
+        var incomeAccount = await GetRequiredAccountAsync(
+            sale.OrganizationId,
+            sale.IncomeAccountId,
+            cancellationToken);
+        var feeAccount = await GetRequiredAccountAsync(
+            sale.OrganizationId,
+            sale.MerchantFeeAccountId,
+            cancellationToken);
+
+        EnsureActive(payPalAccount);
+        EnsureActive(incomeAccount);
+        EnsureActive(feeAccount);
+        EnsureAccountType(payPalAccount, AccountType.Asset, "PayPal account must be an Asset account.");
+        EnsureAccountType(incomeAccount, AccountType.Income, "PayPal income account must be an Income account.");
+        EnsureAccountType(feeAccount, AccountType.Expense, "PayPal fee account must be an Expense account.");
+
+        var lines = new List<JournalLineDraft>
+        {
+            DebitLine(sale.PayPalAccountId, sale.NetAmount, sale.Memo),
+            CreditLine(sale.IncomeAccountId, sale.GrossAmount, sale.Memo)
+        };
+        if (sale.FeeAmount > 0)
+        {
+            lines.Insert(1, DebitLine(sale.MerchantFeeAccountId, sale.FeeAmount, sale.Memo));
+        }
+
+        return await PostJournalEntryAsync(new JournalEntryDraft
+        {
+            OrganizationId = sale.OrganizationId,
+            EntryDate = sale.EntryDate,
+            Memo = NormalizeMemo(sale.Memo),
+            SourceImportedTransactionId = sale.SourceImportedTransactionId,
+            Lines = lines
+        }, cancellationToken);
+    }
+
     private async Task<JournalEntry> PostTwoLineEntryAsync(
         Guid organizationId,
         DateOnly entryDate,

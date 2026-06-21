@@ -4,4 +4,5 @@ public sealed record CsvImportResult(
     Guid? ImportBatchId,
     int PendingCount,
     int DuplicateCount,
-    int ErrorCount);
+    int ErrorCount,
+    int SkippedCount = 0);

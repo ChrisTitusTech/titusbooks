@@ -4,11 +4,13 @@ public static class CsvImportProfiles
 {
     public const string GenericCsvName = "Generic CSV";
     public const string BankOfAmericaName = "Bank of America";
+    public const string PayPalName = "PayPal";
 
     public static IReadOnlyList<CsvImportProfile> All { get; } =
     [
         new(GenericCsvName, GenericCsvName, CreateGenericMapping),
-        new(BankOfAmericaName, BankOfAmericaName, CreateBankOfAmericaMapping)
+        new(BankOfAmericaName, BankOfAmericaName, CreateBankOfAmericaMapping),
+        new(PayPalName, PayPalName, CreatePayPalMapping)
     ];
 
     public static CsvImportProfile Get(string name)
@@ -56,6 +58,17 @@ public static class CsvImportProfiles
                 "Running Balance",
                 "Balance"),
             SkipBalanceOnlyRows: true);
+    }
+
+    private static CsvColumnMapping CreatePayPalMapping(IReadOnlyList<string> headers)
+    {
+        return new CsvColumnMapping(
+            FindRequiredHeader(headers, "Date"),
+            FindRequiredHeader(headers, "Name", "Type"),
+            AmountColumn: FindRequiredHeader(headers, "Net"),
+            SourceTransactionIdColumn: FindRequiredHeader(headers, "Transaction ID"),
+            CurrencyColumn: FindRequiredHeader(headers, "Currency"),
+            BalanceColumn: FindHeader(headers, "Balance"));
     }
 
     private static string FindRequiredHeader(

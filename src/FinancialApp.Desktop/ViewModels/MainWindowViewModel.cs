@@ -138,6 +138,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private int importErrorCount;
 
+    [ObservableProperty]
+    private int importSkippedCount;
+
     private readonly TitusBooksApiClient? apiClient;
     private readonly IReportFileSaver? reportFileSaver;
     private readonly IImportFilePicker? importFilePicker;
@@ -760,6 +763,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             ImportPreviewRows.Clear();
             ImportValidCount = 0;
             ImportErrorCount = 0;
+            ImportSkippedCount = 0;
             WorkspaceMessage = $"Loaded {file.FileName}. Map the columns, then preview.";
         }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or IOException)
@@ -787,7 +791,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
             ImportValidCount = preview.ValidCount;
             ImportErrorCount = preview.ErrorCount;
-            WorkspaceMessage = $"Preview ready: {preview.ValidCount} valid, {preview.ErrorCount} errors.";
+            ImportSkippedCount = preview.SkippedCount;
+            WorkspaceMessage =
+                $"Preview ready: {preview.ValidCount} valid, {preview.SkippedCount} skipped, {preview.ErrorCount} errors.";
         }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
         {
@@ -807,7 +813,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             var result = await apiClient!.ImportCsvAsync(organizationId, command);
             WorkspaceMessage =
-                $"Import complete: {result.PendingCount} pending, {result.DuplicateCount} duplicates, {result.ErrorCount} errors.";
+                $"Import complete: {result.PendingCount} pending, {result.DuplicateCount} duplicates, {result.SkippedCount} skipped, {result.ErrorCount} errors.";
             await LoadImportedTransactionsAsync();
         }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)

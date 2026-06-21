@@ -6,7 +6,8 @@ public sealed record CsvImportResultResponse(
     Guid? ImportBatchId,
     int PendingCount,
     int DuplicateCount,
-    int ErrorCount)
+    int ErrorCount,
+    int SkippedCount)
 {
     public static CsvImportResultResponse FromResult(CsvImportResult result)
     {
@@ -14,6 +15,7 @@ public sealed record CsvImportResultResponse(
             result.ImportBatchId,
             result.PendingCount,
             result.DuplicateCount,
-            result.ErrorCount);
+            result.ErrorCount,
+            result.SkippedCount);
     }
 }

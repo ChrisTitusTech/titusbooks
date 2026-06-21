@@ -428,6 +428,46 @@ public sealed class OrganizationEndpointTests
         Assert.Equal(["Date", "Description", "Amount"], headers);
     }
 
+    [Fact]
+    public async Task PayPalCsvImport_NormalizesCompletedBalanceTransactions()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = await CreateOrganizationAsync(client);
+        var request = new CsvImportApiRequest(
+            "PayPal",
+            "paypal.csv",
+            """
+            Date,Time,TimeZone,Name,Type,Status,Currency,Gross,Fee,Net,Transaction ID,Reference Txn ID,Balance Impact
+            06/01/2026,10:15:30,CDT,Fake Customer,Express Checkout Payment,Completed,USD,100.00,-3.49,96.51,PAY-001,,Credit
+            06/02/2026,11:00:00,CDT,Pending Customer,Express Checkout Payment,Pending,USD,12.00,0.00,12.00,PENDING-001,,Credit
+            """,
+            new CsvColumnMappingRequest(
+                "Date",
+                "Name",
+                AmountColumn: "Net",
+                SourceTransactionIdColumn: "Transaction ID",
+                CurrencyColumn: "Currency"));
+
+        var response = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/imports/csv",
+            request);
+        var result = await response.Content.ReadFromJsonAsync<CsvImportResultResponse>();
+        var transactions = await client.GetFromJsonAsync<List<ImportedTransactionResponse>>(
+            $"/organizations/{organizationId}/imports/transactions");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(result);
+        Assert.Equal(1, result.PendingCount);
+        Assert.Equal(1, result.SkippedCount);
+        var transaction = Assert.Single(transactions!);
+        Assert.Equal("payment", transaction.Kind);
+        Assert.Equal(100m, transaction.GrossAmount);
+        Assert.Equal(3.49m, transaction.FeeAmount);
+        Assert.Equal(96.51m, transaction.NetAmount);
+    }
+
     private static async Task<Guid> CreateOrganizationAsync(HttpClient client)
     {
         var response = await client.PostAsJsonAsync(
@@ -467,6 +507,7 @@ public sealed class OrganizationEndpointTests
                     services.RemoveAll<FinancialReportService>();
                     services.RemoveAll<IImportRepository>();
                     services.RemoveAll<GenericCsvParser>();
+                    services.RemoveAll<PayPalCsvParser>();
                     services.RemoveAll<CsvImportService>();
                     services.AddSingleton<IOrganizationRepository>(repositories);
                     services.AddSingleton<IAccountRepository>(repositories);
@@ -477,6 +518,7 @@ public sealed class OrganizationEndpointTests
                     services.AddSingleton<FinancialReportService>();
                     services.AddSingleton<IImportRepository>(repositories);
                     services.AddSingleton<GenericCsvParser>();
+                    services.AddSingleton<PayPalCsvParser>();
                     services.AddSingleton<CsvImportService>();
                 });
             });
