@@ -23,8 +23,7 @@ public sealed class PayPalCsvParser
         "Fee",
         "Net",
         "Transaction ID",
-        "Reference Txn ID",
-        "Balance Impact"
+        "Reference Txn ID"
     ];
 
     public CsvImportPreview Parse(CsvImportRequest request)
@@ -102,7 +101,9 @@ public sealed class PayPalCsvParser
             var type = GetRequired(rawValues, "Type").Trim();
             var status = GetRequired(rawValues, "Status").Trim();
             var gross = ParseDecimal(GetRequired(rawValues, "Gross"));
-            var rawFee = ParseDecimal(GetRequired(rawValues, "Fee"));
+            var rawFee = GetOptional(rawValues, "Fee") is { } feeValue
+                ? ParseDecimal(feeValue)
+                : 0m;
             var net = ParseDecimal(GetRequired(rawValues, "Net"));
             if (gross + rawFee != net)
             {
@@ -110,7 +111,7 @@ public sealed class PayPalCsvParser
             }
 
             var fee = Math.Abs(rawFee);
-            var transactionId = GetRequired(rawValues, "Transaction ID").Trim();
+            var transactionId = GetOptional(rawValues, "Transaction ID");
             var name = GetOptional(rawValues, "Name");
             var description = name
                 ?? GetOptional(rawValues, "Item Title")
@@ -163,12 +164,8 @@ public sealed class PayPalCsvParser
         var status = GetOptional(rawValues, "Status");
         var balanceImpact = GetOptional(rawValues, "Balance Impact");
         var type = GetOptional(rawValues, "Type");
-        if (status is null || balanceImpact is null || type is null)
-        {
-            return false;
-        }
 
-        return !string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase)
+        return string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase)
             || string.Equals(balanceImpact, "Memo", StringComparison.OrdinalIgnoreCase)
             || type?.Contains("authorization", StringComparison.OrdinalIgnoreCase) == true
             || type?.Contains("account hold", StringComparison.OrdinalIgnoreCase) == true;

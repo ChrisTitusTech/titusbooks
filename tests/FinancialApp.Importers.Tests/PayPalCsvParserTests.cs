@@ -75,6 +75,74 @@ public sealed class PayPalCsvParserTests
         Assert.Equal("PayPal column 'Status' is required.", row.Error);
     }
 
+    [Fact]
+    public void Parse_StagesBalanceAffectingReversedRows()
+    {
+        const string csv = """
+            Date,Time,TimeZone,Name,Type,Status,Currency,Gross,Fee,Net,Transaction ID,Reference Txn ID,Balance Impact
+            06/01/2026,10:15:30,CDT,Fake Customer,Payment Reversal,Reversed,USD,-25.00,0.00,-25.00,REV-001,PAY-001,Debit
+            """;
+
+        var preview = CreateParser().Parse(CreateRequest(csv));
+
+        var row = Assert.Single(preview.Rows);
+        Assert.Null(row.Error);
+        Assert.Equal("Reversed", row.Transaction!.SourceStatus);
+        Assert.Equal(ImportedTransactionKind.Payment, row.Transaction.Kind);
+        Assert.Equal(0, preview.SkippedCount);
+    }
+
+    [Fact]
+    public void Parse_TreatsBlankFeesAsZero()
+    {
+        const string csv = """
+            Date,Time,TimeZone,Name,Type,Status,Currency,Gross,Fee,Net,Transaction ID,Reference Txn ID,Balance Impact
+            06/01/2026,10:15:30,CDT,,Bank Transfer to Bank,Completed,USD,-50.00,,-50.00,TRN-001,,Debit
+            """;
+
+        var preview = CreateParser().Parse(CreateRequest(csv));
+
+        var transaction = Assert.Single(preview.Rows).Transaction!;
+        Assert.Equal(0m, transaction.FeeAmount);
+        Assert.Equal(-50m, transaction.NetAmount);
+    }
+
+    [Fact]
+    public void Parse_AcceptsCsvWithoutBalanceImpact()
+    {
+        const string csv = """
+            Date,Time,TimeZone,Name,Type,Status,Currency,Gross,Fee,Net,Transaction ID,Reference Txn ID
+            06/01/2026,10:15:30,CDT,Fake Customer,Express Checkout Payment,Completed,USD,100.00,-3.49,96.51,PAY-001,
+            """;
+
+        var preview = CreateParser().Parse(CreateRequest(csv));
+
+        Assert.Equal(1, preview.ValidCount);
+        Assert.Equal(0, preview.ErrorCount);
+        Assert.Equal(0, preview.SkippedCount);
+    }
+
+    [Fact]
+    public void Parse_AllowsBlankTransactionIdsAndUsesFallbackFingerprint()
+    {
+        const string csv = """
+            Date,Time,TimeZone,Name,Type,Status,Currency,Gross,Fee,Net,Transaction ID,Reference Txn ID,Balance Impact
+            06/01/2026,10:15:30,CDT,PayPal Adjustment,General Adjustment,Completed,USD,12.00,0.00,12.00,,,Credit
+            """;
+
+        var preview = CreateParser().Parse(CreateRequest(csv));
+
+        var transaction = Assert.Single(preview.Rows).Transaction!;
+        Assert.Null(transaction.SourceTransactionId);
+        Assert.Equal(
+            ImportFingerprint.Create(
+                CsvImportProfiles.PayPalName,
+                new DateOnly(2026, 6, 1),
+                12m,
+                "PayPal Adjustment"),
+            transaction.Fingerprint);
+    }
+
     private static PayPalCsvParser CreateParser() => new();
 
     private static CsvImportRequest CreateRequest(string csv)
