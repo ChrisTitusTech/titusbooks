@@ -1,4 +1,5 @@
 using FinancialApp.Api.Imports;
+using FinancialApp.Core.Accounting;
 using FinancialApp.Core.Imports;
 using FinancialApp.Core.Organizations;
 using FinancialApp.Importers;
@@ -74,6 +75,7 @@ public static class ImportEndpoints
 
         endpoints.MapGet("/organizations/{organizationId:guid}/imports/transactions", async (
             Guid organizationId,
+            string? status,
             [FromServices] IOrganizationRepository organizationRepository,
             [FromServices] IImportRepository importRepository,
             CancellationToken cancellationToken) =>
@@ -83,10 +85,75 @@ public static class ImportEndpoints
                 return Results.NotFound();
             }
 
+            ImportedTransactionStatus? statusFilter = null;
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                if (!Enum.TryParse<ImportedTransactionStatus>(
+                        status,
+                        ignoreCase: true,
+                        out var parsedStatus))
+                {
+                    return Results.BadRequest(EndpointGuards.Error(
+                        "Import status filter is not supported."));
+                }
+
+                statusFilter = parsedStatus;
+            }
+
             var transactions = await importRepository.ListTransactionsAsync(
                 organizationId,
+                statusFilter,
                 cancellationToken);
             return Results.Ok(transactions.Select(ImportedTransactionResponse.FromTransaction));
+        });
+
+        endpoints.MapPost("/organizations/{organizationId:guid}/imports/transactions/categorize", async (
+            Guid organizationId,
+            CategorizeImportedTransactionsRequest request,
+            [FromServices] IOrganizationRepository organizationRepository,
+            [FromServices] IAccountRepository accountRepository,
+            [FromServices] IImportRepository importRepository,
+            CancellationToken cancellationToken) =>
+        {
+            if (!await EndpointGuards.OrganizationExistsAsync(
+                    organizationRepository,
+                    organizationId,
+                    cancellationToken))
+            {
+                return Results.NotFound();
+            }
+
+            if (request.TransactionIds.Count == 0)
+            {
+                return Results.BadRequest(EndpointGuards.Error(
+                    "Select at least one imported transaction."));
+            }
+
+            var account = await accountRepository.GetByIdAsync(
+                organizationId,
+                request.CategoryAccountId,
+                cancellationToken);
+            if (account is null || !account.IsActive)
+            {
+                return Results.BadRequest(EndpointGuards.Error(
+                    "Category must be an active account in this organization."));
+            }
+
+            var categorized = await importRepository.CategorizeTransactionsAsync(
+                organizationId,
+                request.TransactionIds,
+                request.CategoryAccountId,
+                cancellationToken);
+            if (!categorized)
+            {
+                return Results.BadRequest(EndpointGuards.Error(
+                    "Every selected transaction must exist and be pending or categorized."));
+            }
+
+            return Results.Ok(new
+            {
+                CategorizedCount = request.TransactionIds.Distinct().Count()
+            });
         });
 
         return endpoints;

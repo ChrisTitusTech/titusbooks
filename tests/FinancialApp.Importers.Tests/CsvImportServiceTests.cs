@@ -1,3 +1,4 @@
+using FinancialApp.Core.Categorization;
 using FinancialApp.Core.Imports;
 using FinancialApp.Importers;
 
@@ -111,6 +112,57 @@ public sealed class CsvImportServiceTests
         Assert.Single(repository.Transactions);
     }
 
+    [Fact]
+    public async Task ImportAsync_AppliesHighestPriorityCategorizationRule()
+    {
+        var organizationId = Guid.NewGuid();
+        var lowerPriorityAccountId = Guid.NewGuid();
+        var higherPriorityAccountId = Guid.NewGuid();
+        var repository = new InMemoryImportRepository();
+        var ruleRepository = new InMemoryCategorizationRuleRepository(
+        [
+            new CategorizationRule
+            {
+                Id = Guid.NewGuid(),
+                OrganizationId = organizationId,
+                Name = "Office",
+                MatchOperator = CategorizationRuleOperator.Contains,
+                MatchValue = "office",
+                TargetAccountId = lowerPriorityAccountId,
+                Priority = 200
+            },
+            new CategorizationRule
+            {
+                Id = Guid.NewGuid(),
+                OrganizationId = organizationId,
+                Name = "Acme office",
+                MatchOperator = CategorizationRuleOperator.StartsWith,
+                MatchValue = "acme",
+                TargetAccountId = higherPriorityAccountId,
+                Priority = 10
+            }
+        ]);
+        var service = new CsvImportService(
+            new GenericCsvParser(),
+            repository,
+            categorizationRuleRepository: ruleRepository);
+        var request = new CsvImportRequest(
+            organizationId,
+            "Generic CSV",
+            "fake.csv",
+            "Date,Description,Amount\n2026-06-01,ACME OFFICE STORE,-42.00",
+            new CsvColumnMapping("Date", "Description", AmountColumn: "Amount"));
+
+        var result = await service.ImportAsync(request);
+
+        var transaction = Assert.Single(repository.Transactions);
+        Assert.Equal(0, result.PendingCount);
+        Assert.Equal(1, result.CategorizedCount);
+        Assert.Equal(ImportedTransactionStatus.Categorized, transaction.Status);
+        Assert.Equal(higherPriorityAccountId, transaction.CategoryAccountId);
+        Assert.Equal(ruleRepository.Rules[1].Id, transaction.MatchedRuleId);
+    }
+
     private sealed class InMemoryImportRepository : IImportRepository
     {
         public List<ImportBatch> Batches { get; } = [];
@@ -143,10 +195,52 @@ public sealed class CsvImportServiceTests
 
         public Task<IReadOnlyList<ImportedTransaction>> ListTransactionsAsync(
             Guid organizationId,
+            ImportedTransactionStatus? status = null,
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<ImportedTransaction>>(
-                Transactions.Where(transaction => transaction.OrganizationId == organizationId).ToList());
+                Transactions
+                    .Where(transaction => transaction.OrganizationId == organizationId)
+                    .Where(transaction => status is null || transaction.Status == status)
+                    .ToList());
+        }
+
+        public Task<bool> CategorizeTransactionsAsync(
+            Guid organizationId,
+            IReadOnlyCollection<Guid> transactionIds,
+            Guid categoryAccountId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    private sealed class InMemoryCategorizationRuleRepository(
+        IReadOnlyList<CategorizationRule> rules) : ICategorizationRuleRepository
+    {
+        public IReadOnlyList<CategorizationRule> Rules { get; } = rules;
+
+        public Task AddAsync(
+            CategorizationRule rule,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IReadOnlyList<CategorizationRule>> ListAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<CategorizationRule>>(
+                Rules.Where(rule => rule.OrganizationId == organizationId).ToList());
+        }
+
+        public Task<IReadOnlyList<CategorizationRule>> ListActiveAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<CategorizationRule>>(
+                Rules.Where(rule => rule.OrganizationId == organizationId && rule.IsActive).ToList());
         }
     }
 }

@@ -17,7 +17,9 @@ public sealed record ImportedTransactionResponse(
     decimal? FeeAmount,
     decimal? NetAmount,
     string Currency,
-    string Status)
+    string Status,
+    Guid? CategoryAccountId,
+    Guid? MatchedRuleId)
 {
     public static ImportedTransactionResponse FromTransaction(ImportedTransaction transaction)
     {
@@ -36,6 +38,8 @@ public sealed record ImportedTransactionResponse(
             transaction.FeeAmount,
             transaction.NetAmount,
             transaction.Currency,
-            transaction.Status.ToString().ToLowerInvariant());
+            transaction.Status.ToString().ToLowerInvariant(),
+            transaction.CategoryAccountId,
+            transaction.MatchedRuleId);
     }
 }

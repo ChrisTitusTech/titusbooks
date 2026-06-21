@@ -14,5 +14,12 @@ public interface IImportRepository
 
     Task<IReadOnlyList<ImportedTransaction>> ListTransactionsAsync(
         Guid organizationId,
+        ImportedTransactionStatus? status = null,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> CategorizeTransactionsAsync(
+        Guid organizationId,
+        IReadOnlyCollection<Guid> transactionIds,
+        Guid categoryAccountId,
         CancellationToken cancellationToken = default);
 }

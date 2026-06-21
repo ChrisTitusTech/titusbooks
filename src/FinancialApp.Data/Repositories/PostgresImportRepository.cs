@@ -93,6 +93,8 @@ public sealed class PostgresImportRepository : IImportRepository
                 transaction_kind,
                 currency,
                 status,
+                category_account_id,
+                matched_rule_id,
                 fingerprint,
                 raw_payload
             )
@@ -118,6 +120,8 @@ public sealed class PostgresImportRepository : IImportRepository
                 @TransactionKind,
                 @Currency,
                 @Status,
+                @CategoryAccountId,
+                @MatchedRuleId,
                 @Fingerprint,
                 CAST(@RawPayloadJson AS jsonb)
             )
@@ -158,7 +162,7 @@ public sealed class PostgresImportRepository : IImportRepository
                         importedTransaction.SourceType,
                         importedTransaction.SourceStatus,
                         PostedDate = importedTransaction.PostedDate.ToDateTime(TimeOnly.MinValue),
-                        importedTransaction.PostedTime,
+                        PostedTime = importedTransaction.PostedTime?.ToTimeSpan(),
                         importedTransaction.SourceTimeZone,
                         importedTransaction.Description,
                         importedTransaction.RawDescription,
@@ -171,6 +175,8 @@ public sealed class PostgresImportRepository : IImportRepository
                             importedTransaction.Kind),
                         importedTransaction.Currency,
                         Status = importedTransaction.Status.ToString().ToLowerInvariant(),
+                        importedTransaction.CategoryAccountId,
+                        importedTransaction.MatchedRuleId,
                         importedTransaction.Fingerprint,
                         importedTransaction.RawPayloadJson
                     },
@@ -190,9 +196,10 @@ public sealed class PostgresImportRepository : IImportRepository
 
     public async Task<IReadOnlyList<ImportedTransaction>> ListTransactionsAsync(
         Guid organizationId,
+        ImportedTransactionStatus? status = null,
         CancellationToken cancellationToken = default)
     {
-        const string sql = """
+        var sql = """
             SELECT
                 id,
                 organization_id AS OrganizationId,
@@ -215,20 +222,90 @@ public sealed class PostgresImportRepository : IImportRepository
                 transaction_kind AS TransactionKind,
                 currency,
                 status,
+                category_account_id AS CategoryAccountId,
+                matched_rule_id AS MatchedRuleId,
                 fingerprint,
                 raw_payload::text AS RawPayloadJson
             FROM imported_transactions
             WHERE organization_id = @OrganizationId
-            ORDER BY posted_date DESC, created_at DESC
             """;
+        if (status is not null)
+        {
+            sql += "\n  AND status = @Status";
+        }
+
+        sql += "\nORDER BY posted_date DESC, created_at DESC";
 
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         var command = new CommandDefinition(
             sql,
-            new { OrganizationId = organizationId },
+            new
+            {
+                OrganizationId = organizationId,
+                Status = status?.ToString().ToLowerInvariant()
+            },
             cancellationToken: cancellationToken);
         var rows = await connection.QueryAsync<ImportedTransactionRow>(command);
         return rows.Select(row => row.ToImportedTransaction()).ToList();
+    }
+
+    public async Task<bool> CategorizeTransactionsAsync(
+        Guid organizationId,
+        IReadOnlyCollection<Guid> transactionIds,
+        Guid categoryAccountId,
+        CancellationToken cancellationToken = default)
+    {
+        if (transactionIds.Count == 0)
+        {
+            return false;
+        }
+
+        const string countSql = """
+            SELECT COUNT(*)
+            FROM imported_transactions
+            WHERE organization_id = @OrganizationId
+              AND id = ANY(@TransactionIds)
+              AND status IN ('pending', 'categorized')
+            """;
+        const string updateSql = """
+            UPDATE imported_transactions
+            SET
+                category_account_id = @CategoryAccountId,
+                matched_rule_id = NULL,
+                status = 'categorized',
+                updated_at = now()
+            WHERE organization_id = @OrganizationId
+              AND id = ANY(@TransactionIds)
+              AND status IN ('pending', 'categorized')
+            """;
+
+        var distinctIds = transactionIds.Distinct().ToArray();
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var parameters = new
+        {
+            OrganizationId = organizationId,
+            TransactionIds = distinctIds,
+            CategoryAccountId = categoryAccountId
+        };
+        var eligibleCount = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            countSql,
+            parameters,
+            transaction,
+            cancellationToken: cancellationToken));
+        if (eligibleCount != distinctIds.Length)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            updateSql,
+            parameters,
+            transaction,
+            cancellationToken: cancellationToken));
+        await transaction.CommitAsync(cancellationToken);
+        return true;
     }
 
     private sealed record ImportedTransactionRow(
@@ -253,6 +330,8 @@ public sealed class PostgresImportRepository : IImportRepository
         string TransactionKind,
         string Currency,
         string Status,
+        Guid? CategoryAccountId,
+        Guid? MatchedRuleId,
         string Fingerprint,
         string? RawPayloadJson)
     {
@@ -281,6 +360,8 @@ public sealed class PostgresImportRepository : IImportRepository
                 Kind = ImportedTransactionKindNames.Parse(TransactionKind),
                 Currency = Currency,
                 Status = Enum.Parse<ImportedTransactionStatus>(Status, ignoreCase: true),
+                CategoryAccountId = CategoryAccountId,
+                MatchedRuleId = MatchedRuleId,
                 Fingerprint = Fingerprint,
                 RawPayloadJson = RawPayloadJson
             };

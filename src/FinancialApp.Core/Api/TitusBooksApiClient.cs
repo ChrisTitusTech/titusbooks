@@ -286,11 +286,30 @@ public sealed class TitusBooksApiClient
 
     public async Task<IReadOnlyList<ImportedTransactionSummary>> ListImportedTransactionsAsync(
         Guid organizationId,
+        string? status = null,
         CancellationToken cancellationToken = default)
     {
+        var path = $"/organizations/{organizationId}/imports/transactions";
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            path += $"?status={Uri.EscapeDataString(status)}";
+        }
+
         return await httpClient.GetFromJsonAsync<List<ImportedTransactionSummary>>(
-            $"/organizations/{organizationId}/imports/transactions",
+            path,
             cancellationToken) ?? [];
+    }
+
+    public async Task CategorizeImportedTransactionsAsync(
+        Guid organizationId,
+        CategorizeImportedTransactionsCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsJsonAsync(
+            $"/organizations/{organizationId}/imports/transactions/categorize",
+            command,
+            cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
     }
 
     private async Task<T> GetRequiredAsync<T>(
