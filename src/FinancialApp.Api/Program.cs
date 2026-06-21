@@ -2,6 +2,7 @@ using FinancialApp.Api.Endpoints;
 using FinancialApp.Api.Health;
 using FinancialApp.Api.Startup;
 using FinancialApp.Core.Accounting;
+using FinancialApp.Core.Categorization;
 using FinancialApp.Core.Imports;
 using FinancialApp.Core.Organizations;
 using FinancialApp.Data.Database;
@@ -22,6 +23,7 @@ if (!string.IsNullOrWhiteSpace(postgresConnectionString))
     builder.Services.AddScoped<IAccountRepository, PostgresAccountRepository>();
     builder.Services.AddScoped<IJournalEntryRepository, PostgresJournalEntryRepository>();
     builder.Services.AddScoped<IImportRepository, PostgresImportRepository>();
+    builder.Services.AddScoped<ICategorizationRuleRepository, PostgresCategorizationRuleRepository>();
     builder.Services.AddScoped<IFinancialReportRepository, PostgresFinancialReportRepository>();
     builder.Services.AddScoped<DefaultChartOfAccountsSeeder>();
     builder.Services.AddScoped<AccountingService>();
@@ -29,6 +31,7 @@ if (!string.IsNullOrWhiteSpace(postgresConnectionString))
     builder.Services.AddScoped<GenericCsvParser>();
     builder.Services.AddScoped<PayPalCsvParser>();
     builder.Services.AddScoped<CsvImportService>();
+    builder.Services.AddSingleton<CategorizationRuleEngine>();
 }
 
 var app = builder.Build();
@@ -43,6 +46,7 @@ app.MapAccountEndpoints();
 app.MapTransactionEndpoints();
 app.MapReportEndpoints();
 app.MapImportEndpoints();
+app.MapCategorizationRuleEndpoints();
 
 app.Run();
 

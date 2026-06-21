@@ -249,6 +249,8 @@ Handle PayPal CSV exports and common PayPal accounting cases.
 
 ## Phase 8: Import Inbox and Categorization Rules
 
+**Status: In Progress**
+
 ### Goal
 
 Make imports usable by letting users review, categorize, and post transactions.

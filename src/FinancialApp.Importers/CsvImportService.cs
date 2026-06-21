@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using FinancialApp.Core.Categorization;
 using FinancialApp.Core.Imports;
 
 namespace FinancialApp.Importers;
@@ -10,15 +11,21 @@ public sealed class CsvImportService
     private readonly GenericCsvParser parser;
     private readonly PayPalCsvParser payPalParser;
     private readonly IImportRepository repository;
+    private readonly ICategorizationRuleRepository? categorizationRuleRepository;
+    private readonly CategorizationRuleEngine categorizationRuleEngine;
 
     public CsvImportService(
         GenericCsvParser parser,
         IImportRepository repository,
-        PayPalCsvParser? payPalParser = null)
+        PayPalCsvParser? payPalParser = null,
+        ICategorizationRuleRepository? categorizationRuleRepository = null,
+        CategorizationRuleEngine? categorizationRuleEngine = null)
     {
         this.parser = parser;
         this.repository = repository;
         this.payPalParser = payPalParser ?? new PayPalCsvParser();
+        this.categorizationRuleRepository = categorizationRuleRepository;
+        this.categorizationRuleEngine = categorizationRuleEngine ?? new CategorizationRuleEngine();
     }
 
     public CsvImportPreview Preview(CsvImportRequest request)
@@ -64,13 +71,18 @@ public sealed class CsvImportService
             return new CsvImportResult(
                 null,
                 0,
+                0,
                 duplicateCount,
                 preview.ErrorCount,
                 preview.SkippedCount);
         }
 
         var batchId = Guid.NewGuid();
-        var pendingTransactions = uniqueTransactions
+        var categorizedTransactions = await ApplyCategorizationRulesAsync(
+            request.OrganizationId,
+            uniqueTransactions,
+            cancellationToken);
+        var pendingTransactions = categorizedTransactions
             .Select(transaction => transaction with { ImportBatchId = batchId })
             .ToList();
         await repository.AddBatchAsync(
@@ -80,10 +92,47 @@ public sealed class CsvImportService
 
         return new CsvImportResult(
             batchId,
-            pendingTransactions.Count,
+            pendingTransactions.Count(transaction =>
+                transaction.Status == ImportedTransactionStatus.Pending),
+            pendingTransactions.Count(transaction =>
+                transaction.Status == ImportedTransactionStatus.Categorized),
             duplicateCount,
             preview.ErrorCount,
             preview.SkippedCount);
+    }
+
+    private async Task<IReadOnlyList<ImportedTransaction>> ApplyCategorizationRulesAsync(
+        Guid organizationId,
+        IReadOnlyList<ImportedTransaction> transactions,
+        CancellationToken cancellationToken)
+    {
+        if (categorizationRuleRepository is null)
+        {
+            return transactions;
+        }
+
+        var rules = await categorizationRuleRepository.ListActiveAsync(
+            organizationId,
+            cancellationToken);
+        if (rules.Count == 0)
+        {
+            return transactions;
+        }
+
+        return transactions
+            .Select(transaction =>
+            {
+                var match = categorizationRuleEngine.FindMatch(transaction, rules);
+                return match is null
+                    ? transaction
+                    : transaction with
+                    {
+                        CategoryAccountId = match.TargetAccountId,
+                        MatchedRuleId = match.Id,
+                        Status = ImportedTransactionStatus.Categorized
+                    };
+            })
+            .ToList();
     }
 
     private CsvImportPreview Parse(CsvImportRequest request)

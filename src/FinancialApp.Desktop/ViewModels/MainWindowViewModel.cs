@@ -141,6 +141,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private int importSkippedCount;
 
+    [ObservableProperty]
+    private string selectedImportStatusFilter = "Pending";
+
+    [ObservableProperty]
+    private AccountSummary? selectedImportCategory;
+
     private readonly TitusBooksApiClient? apiClient;
     private readonly IReportFileSaver? reportFileSaver;
     private readonly IImportFilePicker? importFilePicker;
@@ -239,7 +245,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<CsvImportPreviewRowSummary> ImportPreviewRows { get; } = [];
 
-    public ObservableCollection<ImportedTransactionSummary> ImportedTransactions { get; } = [];
+    public ObservableCollection<ImportInboxItemViewModel> ImportedTransactions { get; } = [];
+
+    public IReadOnlyList<string> ImportStatusFilters { get; } =
+    [
+        "All",
+        "Pending",
+        "Categorized",
+        "Duplicate"
+    ];
 
     public ObservableCollection<AccountReportTotalSummary> DashboardIncomeSources { get; } = [];
 
@@ -447,6 +461,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             ReplaceAccounts(accounts);
             SelectedAccount = Accounts.FirstOrDefault();
             SelectedRegisterAccount ??= Accounts.FirstOrDefault();
+            SelectedImportCategory = Accounts.FirstOrDefault(account =>
+                account.IsActive
+                && account.AccountType is "Expense" or "Income");
             RefreshTransactionAccountOptions();
             WorkspaceMessage = "Accounts loaded.";
         }
@@ -813,7 +830,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             var result = await apiClient!.ImportCsvAsync(organizationId, command);
             WorkspaceMessage =
-                $"Import complete: {result.PendingCount} pending, {result.DuplicateCount} duplicates, {result.SkippedCount} skipped, {result.ErrorCount} errors.";
+                $"Import complete: {result.PendingCount} pending, {result.CategorizedCount} categorized, {result.DuplicateCount} duplicates, {result.SkippedCount} skipped, {result.ErrorCount} errors.";
             await LoadImportedTransactionsAsync();
         }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
@@ -835,7 +852,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         try
         {
-            var transactions = await apiClient.ListImportedTransactionsAsync(organization.Id);
+            var status = string.Equals(
+                SelectedImportStatusFilter,
+                "All",
+                StringComparison.OrdinalIgnoreCase)
+                ? null
+                : SelectedImportStatusFilter;
+            var transactions = await apiClient.ListImportedTransactionsAsync(
+                organization.Id,
+                status);
             if (loadVersion != importLoadVersion)
             {
                 return;
@@ -843,8 +868,50 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
             foreach (var transaction in transactions)
             {
-                ImportedTransactions.Add(transaction);
+                ImportedTransactions.Add(new ImportInboxItemViewModel(transaction));
             }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            WorkspaceMessage = exception.Message;
+        }
+    }
+
+    [RelayCommand]
+    public async Task CategorizeSelectedImportsAsync()
+    {
+        if (apiClient is null || SelectedOrganization is null)
+        {
+            WorkspaceMessage = "Select an organization first.";
+            return;
+        }
+
+        if (SelectedImportCategory is null)
+        {
+            WorkspaceMessage = "Select a category first.";
+            return;
+        }
+
+        var selectedIds = ImportedTransactions
+            .Where(transaction => transaction.IsSelected)
+            .Select(transaction => transaction.Id)
+            .ToList();
+        if (selectedIds.Count == 0)
+        {
+            WorkspaceMessage = "Select at least one imported transaction.";
+            return;
+        }
+
+        try
+        {
+            await apiClient.CategorizeImportedTransactionsAsync(
+                SelectedOrganization.Id,
+                new CategorizeImportedTransactionsCommand(
+                    selectedIds,
+                    SelectedImportCategory.Id));
+            WorkspaceMessage =
+                $"{selectedIds.Count} imported transaction(s) categorized as {SelectedImportCategory.Name}.";
+            await LoadImportedTransactionsAsync();
         }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
         {
@@ -898,6 +965,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _ = LoadRegisterAsync();
     }
 
+    partial void OnSelectedImportStatusFilterChanged(string value)
+    {
+        if (CurrentPage == NavigationPage.Imports)
+        {
+            _ = LoadImportedTransactionsAsync();
+        }
+    }
+
     partial void OnImportSourceChanged(string value)
     {
         if (CsvHeaders.Count > 1)
@@ -949,6 +1024,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         SelectedFromAccount = null;
         SelectedToAccount = null;
         SelectedRegisterAccount = null;
+        SelectedImportCategory = null;
         ImportedTransactions.Clear();
         Interlocked.Increment(ref dashboardLoadVersion);
         Interlocked.Increment(ref importLoadVersion);

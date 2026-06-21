@@ -255,7 +255,7 @@
                 </Grid>
 
                 <Grid Grid.Column="1"
-                      RowDefinitions="Auto,38,*"
+                      RowDefinitions="Auto,Auto,38,*"
                       RowSpacing="8">
                     <Grid ColumnDefinitions="*,Auto">
                         <TextBlock Text="Staging"
@@ -269,36 +269,57 @@
                                 Foreground="#087EA4"
                                 BorderThickness="0"/>
                     </Grid>
-                    <Border Grid.Row="1"
+                    <Grid Grid.Row="1"
+                          ColumnDefinitions="130,*,Auto"
+                          ColumnSpacing="8">
+                        <ComboBox ItemsSource="{Binding ImportStatusFilters}"
+                                  SelectedItem="{Binding SelectedImportStatusFilter}"/>
+                        <ComboBox Grid.Column="1"
+                                  ItemsSource="{Binding Accounts}"
+                                  SelectedItem="{Binding SelectedImportCategory}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="api:AccountSummary">
+                                    <TextBlock Text="{Binding Name}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button Grid.Column="2"
+                                Command="{Binding CategorizeSelectedImportsCommand}"
+                                Content="Categorize selected"
+                                Background="#087EA4"
+                                Foreground="White"/>
+                    </Grid>
+                    <Border Grid.Row="2"
                             Background="#E9EEF5"
                             BorderBrush="#CBD5E1"
                             BorderThickness="1">
                         <Grid Margin="8,0"
-                              ColumnDefinitions="90,*,90,80"
+                              ColumnDefinitions="28,90,*,90,80"
                               ColumnSpacing="8">
-                            <TextBlock Text="Date" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
-                            <TextBlock Grid.Column="1" Text="Description" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
-                            <TextBlock Grid.Column="2" Text="Amount" HorizontalAlignment="Right" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
-                            <TextBlock Grid.Column="3" Text="Status" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                            <TextBlock Grid.Column="1" Text="Date" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                            <TextBlock Grid.Column="2" Text="Description" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                            <TextBlock Grid.Column="3" Text="Amount" HorizontalAlignment="Right" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
+                            <TextBlock Grid.Column="4" Text="Status" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#334155"/>
                         </Grid>
                     </Border>
-                    <ListBox Grid.Row="2"
+                    <ListBox Grid.Row="3"
                              MinHeight="260"
                              Background="White"
                              BorderBrush="#CBD5E1"
                              ItemsSource="{Binding ImportedTransactions}">
                         <ListBox.ItemTemplate>
-                            <DataTemplate x:DataType="api:ImportedTransactionSummary">
+                            <DataTemplate x:DataType="vm:ImportInboxItemViewModel">
                                 <Grid Margin="8,7"
-                                      ColumnDefinitions="90,*,90,80"
+                                      ColumnDefinitions="28,90,*,90,80"
                                       ColumnSpacing="8">
-                                    <TextBlock Text="{Binding PostedDate}" Foreground="#334155"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding Description}" TextTrimming="CharacterEllipsis" Foreground="#172033"/>
-                                    <TextBlock Grid.Column="2"
+                                    <CheckBox IsChecked="{Binding IsSelected}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding PostedDate}" Foreground="#334155"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding Description}" TextTrimming="CharacterEllipsis" Foreground="#172033"/>
+                                    <TextBlock Grid.Column="3"
                                                Text="{Binding Amount, StringFormat='{}{0:C}'}"
                                                HorizontalAlignment="Right"
                                                Foreground="#334155"/>
-                                    <TextBlock Grid.Column="3" Text="{Binding Status}" Foreground="#475569"/>
+                                    <TextBlock Grid.Column="4" Text="{Binding Status}" Foreground="#475569"/>
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>

@@ -15,4 +15,6 @@ public sealed record ImportedTransactionSummary(
     decimal? FeeAmount,
     decimal? NetAmount,
     string Currency,
-    string Status);
+    string Status,
+    Guid? CategoryAccountId,
+    Guid? MatchedRuleId);

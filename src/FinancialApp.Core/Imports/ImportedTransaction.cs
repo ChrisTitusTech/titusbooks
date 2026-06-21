@@ -44,6 +44,10 @@ public sealed record ImportedTransaction
 
     public ImportedTransactionStatus Status { get; init; } = ImportedTransactionStatus.Pending;
 
+    public Guid? CategoryAccountId { get; init; }
+
+    public Guid? MatchedRuleId { get; init; }
+
     public required string Fingerprint { get; init; }
 
     public string? RawPayloadJson { get; init; }

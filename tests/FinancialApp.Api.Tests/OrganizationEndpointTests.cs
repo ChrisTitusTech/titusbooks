@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using FinancialApp.Api.Accounting;
+using FinancialApp.Api.Categorization;
 using FinancialApp.Api.Imports;
 using FinancialApp.Api.Organizations;
 using FinancialApp.Core.Accounting;
+using FinancialApp.Core.Categorization;
 using FinancialApp.Core.Imports;
 using FinancialApp.Core.Organizations;
 using FinancialApp.Importers;
@@ -468,6 +470,104 @@ public sealed class OrganizationEndpointTests
         Assert.Equal(96.51m, transaction.NetAmount);
     }
 
+    [Fact]
+    public async Task CategorizationRule_AppliesToFutureImports()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = await CreateOrganizationAsync(client);
+        var category = await CreateAccountAsync(
+            client,
+            organizationId,
+            "Office Supplies",
+            "Expense");
+
+        var createRuleResponse = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/categorization-rules",
+            new CreateCategorizationRuleRequest(
+                "Office purchases",
+                "description",
+                "contains",
+                "office",
+                category.Id,
+                10));
+        var rule = await createRuleResponse.Content.ReadFromJsonAsync<CategorizationRuleResponse>();
+        var importResponse = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/imports/csv",
+            new CsvImportApiRequest(
+                "Generic CSV",
+                "fake.csv",
+                "Date,Description,Amount\n2026-06-01,ACME OFFICE STORE,-42.00",
+                new CsvColumnMappingRequest(
+                    "Date",
+                    "Description",
+                    AmountColumn: "Amount")));
+        var importResult = await importResponse.Content.ReadFromJsonAsync<CsvImportResultResponse>();
+        var transactions = await client.GetFromJsonAsync<List<ImportedTransactionResponse>>(
+            $"/organizations/{organizationId}/imports/transactions");
+
+        Assert.Equal(HttpStatusCode.Created, createRuleResponse.StatusCode);
+        Assert.NotNull(rule);
+        Assert.Equal(HttpStatusCode.OK, importResponse.StatusCode);
+        Assert.NotNull(importResult);
+        Assert.Equal(0, importResult.PendingCount);
+        Assert.Equal(1, importResult.CategorizedCount);
+        var transaction = Assert.Single(transactions!);
+        Assert.Equal("categorized", transaction.Status);
+        Assert.Equal(category.Id, transaction.CategoryAccountId);
+        Assert.Equal(rule.Id, transaction.MatchedRuleId);
+    }
+
+    [Fact]
+    public async Task ImportInbox_CategorizesSelectedTransactionsAndFiltersByStatus()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = await CreateOrganizationAsync(client);
+        var category = await CreateAccountAsync(
+            client,
+            organizationId,
+            "Office Supplies",
+            "Expense");
+        await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/imports/csv",
+            new CsvImportApiRequest(
+                "Generic CSV",
+                "fake.csv",
+                """
+                Date,Description,Amount
+                2026-06-01,Office store,-42.00
+                2026-06-02,Coffee shop,-8.00
+                """,
+                new CsvColumnMappingRequest(
+                    "Date",
+                    "Description",
+                    AmountColumn: "Amount")));
+        var pending = await client.GetFromJsonAsync<List<ImportedTransactionResponse>>(
+            $"/organizations/{organizationId}/imports/transactions?status=pending");
+
+        var categorizeResponse = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/imports/transactions/categorize",
+            new CategorizeImportedTransactionsRequest(
+                [pending![0].Id, pending[1].Id],
+                category.Id));
+        var categorized = await client.GetFromJsonAsync<List<ImportedTransactionResponse>>(
+            $"/organizations/{organizationId}/imports/transactions?status=categorized");
+        var remainingPending = await client.GetFromJsonAsync<List<ImportedTransactionResponse>>(
+            $"/organizations/{organizationId}/imports/transactions?status=pending");
+
+        Assert.Equal(HttpStatusCode.OK, categorizeResponse.StatusCode);
+        Assert.Equal(2, categorized!.Count);
+        Assert.All(categorized, transaction =>
+        {
+            Assert.Equal(category.Id, transaction.CategoryAccountId);
+            Assert.Null(transaction.MatchedRuleId);
+        });
+        Assert.Empty(remainingPending!);
+    }
+
     private static async Task<Guid> CreateOrganizationAsync(HttpClient client)
     {
         var response = await client.PostAsJsonAsync(
@@ -506,6 +606,8 @@ public sealed class OrganizationEndpointTests
                     services.RemoveAll<IFinancialReportRepository>();
                     services.RemoveAll<FinancialReportService>();
                     services.RemoveAll<IImportRepository>();
+                    services.RemoveAll<ICategorizationRuleRepository>();
+                    services.RemoveAll<CategorizationRuleEngine>();
                     services.RemoveAll<GenericCsvParser>();
                     services.RemoveAll<PayPalCsvParser>();
                     services.RemoveAll<CsvImportService>();
@@ -517,6 +619,8 @@ public sealed class OrganizationEndpointTests
                     services.AddSingleton<IFinancialReportRepository>(repositories);
                     services.AddSingleton<FinancialReportService>();
                     services.AddSingleton<IImportRepository>(repositories);
+                    services.AddSingleton<ICategorizationRuleRepository>(repositories);
+                    services.AddSingleton<CategorizationRuleEngine>();
                     services.AddSingleton<GenericCsvParser>();
                     services.AddSingleton<PayPalCsvParser>();
                     services.AddSingleton<CsvImportService>();
@@ -529,11 +633,13 @@ public sealed class OrganizationEndpointTests
         IAccountRepository,
         IJournalEntryRepository,
         IImportRepository,
+        ICategorizationRuleRepository,
         IFinancialReportRepository
     {
         private readonly List<Account> accounts = [];
         private readonly List<JournalEntry> journalEntries = [];
         private readonly List<ImportedTransaction> importedTransactions = [];
+        private readonly List<CategorizationRule> categorizationRules = [];
 
         public List<Organization> Organizations { get; } = [];
 
@@ -702,11 +808,76 @@ public sealed class OrganizationEndpointTests
 
         public Task<IReadOnlyList<ImportedTransaction>> ListTransactionsAsync(
             Guid organizationId,
+            ImportedTransactionStatus? status = null,
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<ImportedTransaction>>(
                 importedTransactions
                     .Where(transaction => transaction.OrganizationId == organizationId)
+                    .Where(transaction => status is null || transaction.Status == status)
+                    .ToList());
+        }
+
+        public Task<bool> CategorizeTransactionsAsync(
+            Guid organizationId,
+            IReadOnlyCollection<Guid> transactionIds,
+            Guid categoryAccountId,
+            CancellationToken cancellationToken = default)
+        {
+            var distinctIds = transactionIds.Distinct().ToHashSet();
+            var matches = importedTransactions
+                .Where(transaction =>
+                    transaction.OrganizationId == organizationId
+                    && distinctIds.Contains(transaction.Id)
+                    && transaction.Status is ImportedTransactionStatus.Pending
+                        or ImportedTransactionStatus.Categorized)
+                .ToList();
+            if (matches.Count != distinctIds.Count)
+            {
+                return Task.FromResult(false);
+            }
+
+            foreach (var match in matches)
+            {
+                var index = importedTransactions.IndexOf(match);
+                importedTransactions[index] = match with
+                {
+                    CategoryAccountId = categoryAccountId,
+                    MatchedRuleId = null,
+                    Status = ImportedTransactionStatus.Categorized
+                };
+            }
+
+            return Task.FromResult(true);
+        }
+
+        public Task AddAsync(
+            CategorizationRule rule,
+            CancellationToken cancellationToken = default)
+        {
+            categorizationRules.Add(rule);
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<CategorizationRule>> ListAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<CategorizationRule>>(
+                categorizationRules
+                    .Where(rule => rule.OrganizationId == organizationId)
+                    .OrderBy(rule => rule.Priority)
+                    .ToList());
+        }
+
+        public Task<IReadOnlyList<CategorizationRule>> ListActiveAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<CategorizationRule>>(
+                categorizationRules
+                    .Where(rule => rule.OrganizationId == organizationId && rule.IsActive)
+                    .OrderBy(rule => rule.Priority)
                     .ToList());
         }
     }

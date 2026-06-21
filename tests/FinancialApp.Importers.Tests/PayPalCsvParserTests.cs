@@ -194,11 +194,23 @@ public sealed class PayPalCsvParserTests
 
         public Task<IReadOnlyList<ImportedTransaction>> ListTransactionsAsync(
             Guid organizationId,
+            ImportedTransactionStatus? status = null,
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<ImportedTransaction>>(
                 transactions.Where(transaction =>
-                    transaction.OrganizationId == organizationId).ToList());
+                    transaction.OrganizationId == organizationId)
+                    .Where(transaction => status is null || transaction.Status == status)
+                    .ToList());
+        }
+
+        public Task<bool> CategorizeTransactionsAsync(
+            Guid organizationId,
+            IReadOnlyCollection<Guid> transactionIds,
+            Guid categoryAccountId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
         }
     }
 }
