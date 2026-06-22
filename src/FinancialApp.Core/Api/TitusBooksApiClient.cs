@@ -312,6 +312,84 @@ public sealed class TitusBooksApiClient
         await EnsureSuccessAsync(response, cancellationToken);
     }
 
+    public async Task<CategorizationRuleSummary> CreateCategorizationRuleAsync(
+        Guid organizationId,
+        CreateCategorizationRuleCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsJsonAsync(
+            $"/organizations/{organizationId}/categorization-rules",
+            command,
+            cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await ReadRequiredJsonAsync<CategorizationRuleSummary>(
+            response,
+            "API returned an empty categorization rule response.",
+            cancellationToken);
+    }
+
+    public async Task<PostImportedTransactionsResult> PostImportedTransactionsAsync(
+        Guid organizationId,
+        PostImportedTransactionsCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsJsonAsync(
+            $"/organizations/{organizationId}/imports/transactions/post",
+            command,
+            cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await ReadRequiredJsonAsync<PostImportedTransactionsResult>(
+            response,
+            "API returned an empty import posting response.",
+            cancellationToken);
+    }
+
+    public async Task<ReconciliationPreviewSummary> PreviewReconciliationAsync(
+        Guid organizationId,
+        Guid accountId,
+        ReconciliationCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        return await PostReconciliationAsync(
+            organizationId,
+            accountId,
+            "preview",
+            command,
+            cancellationToken);
+    }
+
+    public async Task<ReconciliationPreviewSummary> CompleteReconciliationAsync(
+        Guid organizationId,
+        Guid accountId,
+        ReconciliationCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        return await PostReconciliationAsync(
+            organizationId,
+            accountId,
+            "complete",
+            command,
+            cancellationToken);
+    }
+
+    private async Task<ReconciliationPreviewSummary> PostReconciliationAsync(
+        Guid organizationId,
+        Guid accountId,
+        string action,
+        ReconciliationCommand command,
+        CancellationToken cancellationToken)
+    {
+        using var response = await httpClient.PostAsJsonAsync(
+            $"/organizations/{organizationId}/accounts/{accountId}/reconciliation/{action}",
+            command,
+            cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await ReadRequiredJsonAsync<ReconciliationPreviewSummary>(
+            response,
+            "API returned an empty reconciliation response.",
+            cancellationToken);
+    }
+
     private async Task<T> GetRequiredAsync<T>(
         string path,
         string emptyResponseMessage,

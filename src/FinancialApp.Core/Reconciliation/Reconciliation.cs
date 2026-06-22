@@ -13,4 +13,6 @@ public sealed record Reconciliation
     public required decimal StatementEndBalance { get; init; }
 
     public DateTimeOffset? CompletedAt { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
 }

@@ -147,6 +147,28 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private AccountSummary? selectedImportCategory;
 
+    [ObservableProperty]
+    private AccountSummary? selectedImportPostingAccount;
+
+    [ObservableProperty]
+    private AccountSummary? selectedImportFeeAccount;
+
+    [ObservableProperty]
+    private AccountSummary? selectedReconciliationAccount;
+
+    [ObservableProperty]
+    private string reconciliationStatementEndDate = DateOnly.FromDateTime(DateTime.Today)
+        .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    [ObservableProperty]
+    private string reconciliationStatementEndBalance = string.Empty;
+
+    [ObservableProperty]
+    private decimal reconciliationClearedBalance;
+
+    [ObservableProperty]
+    private decimal reconciliationDifference;
+
     private readonly TitusBooksApiClient? apiClient;
     private readonly IReportFileSaver? reportFileSaver;
     private readonly IImportFilePicker? importFilePicker;
@@ -185,6 +207,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         NavigationPage.Transactions => "Transactions",
         NavigationPage.Imports => "Import transactions",
         NavigationPage.Reports => "Reports",
+        NavigationPage.Reconciliation => "Reconciliation",
         _ => "Company setup"
     };
 
@@ -195,6 +218,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         NavigationPage.Transactions => "Record money in, money out, and transfers between accounts.",
         NavigationPage.Imports => "Map a CSV file and review transactions before they enter staging.",
         NavigationPage.Reports => "Review financial performance for a selected date range.",
+        NavigationPage.Reconciliation => "Match account activity to an external statement.",
         _ => "Create a company and choose which set of books to work with."
     };
 
@@ -209,6 +233,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool IsImportsPage => CurrentPage == NavigationPage.Imports;
 
     public bool IsReportsPage => CurrentPage == NavigationPage.Reports;
+
+    public bool IsReconciliationPage => CurrentPage == NavigationPage.Reconciliation;
 
     public ObservableCollection<OrganizationSummary> Organizations { get; } = [];
 
@@ -234,6 +260,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<AccountSummary> ToAccountOptions { get; } = [];
 
+    public ObservableCollection<AccountSummary> ReconciliationAccountOptions { get; } = [];
+
     public ObservableCollection<AccountRegisterEntrySummary> RegisterEntries { get; } = [];
 
     public ObservableCollection<ReportDisplayRow> ReportRows { get; } = [];
@@ -246,6 +274,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<CsvImportPreviewRowSummary> ImportPreviewRows { get; } = [];
 
     public ObservableCollection<ImportInboxItemViewModel> ImportedTransactions { get; } = [];
+
+    public ObservableCollection<AccountSummary> ImportPostingAccountOptions { get; } = [];
+
+    public ObservableCollection<AccountSummary> ImportFeeAccountOptions { get; } = [];
+
+    public ObservableCollection<ReconciliationTransactionItemViewModel> ReconciliationTransactions { get; } = [];
 
     public IReadOnlyList<string> ImportStatusFilters { get; } =
     [
@@ -308,6 +342,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             else if (targetPage == NavigationPage.Imports)
             {
                 await LoadImportedTransactionsAsync();
+            }
+            else if (targetPage == NavigationPage.Reconciliation)
+            {
+                await LoadReconciliationAsync();
             }
         }
     }
@@ -464,6 +502,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             SelectedImportCategory = Accounts.FirstOrDefault(account =>
                 account.IsActive
                 && account.AccountType is "Expense" or "Income");
+            RefreshImportPostingAccountOptions();
+            RefreshImportFeeAccountOptions();
             RefreshTransactionAccountOptions();
             WorkspaceMessage = "Accounts loaded.";
         }
@@ -919,6 +959,143 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
+    public async Task CreateRuleFromSelectedImportAsync()
+    {
+        if (apiClient is null || SelectedOrganization is null)
+        {
+            WorkspaceMessage = "Select an organization first.";
+            return;
+        }
+
+        if (SelectedImportCategory is null)
+        {
+            WorkspaceMessage = "Select a category for the rule.";
+            return;
+        }
+
+        var selected = ImportedTransactions
+            .Where(transaction => transaction.IsSelected)
+            .ToList();
+        if (selected.Count != 1)
+        {
+            WorkspaceMessage = "Select exactly one imported transaction to create a rule.";
+            return;
+        }
+
+        try
+        {
+            var transaction = selected[0];
+            var rule = await apiClient.CreateCategorizationRuleAsync(
+                SelectedOrganization.Id,
+                new CreateCategorizationRuleCommand(
+                    $"Match {transaction.Description}",
+                    "description",
+                    "contains",
+                    transaction.Description,
+                    SelectedImportCategory.Id));
+            WorkspaceMessage = $"Rule '{rule.Name}' created for future imports.";
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            WorkspaceMessage = exception.Message;
+        }
+    }
+
+    [RelayCommand]
+    public async Task PostSelectedImportsAsync()
+    {
+        if (apiClient is null || SelectedOrganization is null)
+        {
+            WorkspaceMessage = "Select an organization first.";
+            return;
+        }
+
+        if (SelectedImportPostingAccount is null)
+        {
+            WorkspaceMessage = "Select the account where these transactions occurred.";
+            return;
+        }
+
+        var selectedIds = ImportedTransactions
+            .Where(transaction => transaction.IsSelected)
+            .Select(transaction => transaction.Id)
+            .ToList();
+        if (selectedIds.Count == 0)
+        {
+            WorkspaceMessage = "Select at least one categorized transaction to post.";
+            return;
+        }
+
+        try
+        {
+            var result = await apiClient.PostImportedTransactionsAsync(
+                SelectedOrganization.Id,
+                new PostImportedTransactionsCommand(
+                    selectedIds,
+                    SelectedImportPostingAccount.Id,
+                    SelectedImportFeeAccount?.Id));
+            WorkspaceMessage = $"{result.PostedCount} imported transaction(s) posted.";
+            await LoadImportedTransactionsAsync();
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            WorkspaceMessage = exception.Message;
+        }
+    }
+
+    [RelayCommand]
+    public async Task LoadReconciliationAsync()
+    {
+        if (!TryCreateReconciliationCommand(out var organizationId, out var accountId, out var command))
+        {
+            ReconciliationTransactions.Clear();
+            ReconciliationClearedBalance = 0;
+            ReconciliationDifference = 0;
+            return;
+        }
+
+        try
+        {
+            var preview = await apiClient!.PreviewReconciliationAsync(
+                organizationId,
+                accountId,
+                command);
+            DisplayReconciliation(preview);
+            WorkspaceMessage = preview.Difference == 0
+                ? "Reconciliation is balanced and ready to complete."
+                : $"Reconciliation difference: {preview.Difference:C}.";
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            WorkspaceMessage = exception.Message;
+        }
+    }
+
+    [RelayCommand]
+    public async Task CompleteReconciliationAsync()
+    {
+        if (!TryCreateReconciliationCommand(out var organizationId, out var accountId, out var command))
+        {
+            return;
+        }
+
+        try
+        {
+            var completed = await apiClient!.CompleteReconciliationAsync(
+                organizationId,
+                accountId,
+                command);
+            DisplayReconciliation(completed);
+            WorkspaceMessage = "Reconciliation completed.";
+            await LoadReconciliationAsync();
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            WorkspaceMessage = exception.Message;
+        }
+    }
+
     partial void OnSelectedOrganizationChanged(OrganizationSummary? value)
     {
         OnPropertyChanged(nameof(PageTitle));
@@ -938,6 +1115,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             _ = LoadImportedTransactionsAsync();
         }
+        else if (CurrentPage == NavigationPage.Reconciliation)
+        {
+            _ = LoadReconciliationAsync();
+        }
     }
 
     partial void OnCurrentPageChanged(NavigationPage value)
@@ -950,6 +1131,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsTransactionsPage));
         OnPropertyChanged(nameof(IsImportsPage));
         OnPropertyChanged(nameof(IsReportsPage));
+        OnPropertyChanged(nameof(IsReconciliationPage));
     }
 
     partial void OnSelectedTransactionTypeChanged(string value)
@@ -970,6 +1152,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (CurrentPage == NavigationPage.Imports)
         {
             _ = LoadImportedTransactionsAsync();
+        }
+    }
+
+    partial void OnSelectedReconciliationAccountChanged(AccountSummary? value)
+    {
+        if (CurrentPage == NavigationPage.Reconciliation)
+        {
+            _ = LoadReconciliationAsync();
         }
     }
 
@@ -1025,12 +1215,141 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         SelectedToAccount = null;
         SelectedRegisterAccount = null;
         SelectedImportCategory = null;
+        SelectedImportPostingAccount = null;
+        SelectedImportFeeAccount = null;
+        SelectedReconciliationAccount = null;
         ImportedTransactions.Clear();
+        ImportPostingAccountOptions.Clear();
+        ImportFeeAccountOptions.Clear();
+        ReconciliationAccountOptions.Clear();
+        ReconciliationTransactions.Clear();
         Interlocked.Increment(ref dashboardLoadVersion);
         Interlocked.Increment(ref importLoadVersion);
         ClearDashboard();
         ClearReport();
         RefreshTransactionAccountOptions();
+    }
+
+    private bool TryCreateReconciliationCommand(
+        out Guid organizationId,
+        out Guid accountId,
+        out ReconciliationCommand command)
+    {
+        organizationId = SelectedOrganization?.Id ?? Guid.Empty;
+        accountId = SelectedReconciliationAccount?.Id ?? Guid.Empty;
+        command = null!;
+
+        if (apiClient is null || SelectedOrganization is null)
+        {
+            WorkspaceMessage = "Select an organization first.";
+            return false;
+        }
+
+        if (SelectedReconciliationAccount is null)
+        {
+            WorkspaceMessage = "Select an account to reconcile.";
+            return false;
+        }
+
+        if (!DateOnly.TryParse(
+            ReconciliationStatementEndDate,
+            CultureInfo.InvariantCulture,
+            out var statementEndDate))
+        {
+            WorkspaceMessage = "Enter the statement ending date as YYYY-MM-DD.";
+            return false;
+        }
+
+        if (!decimal.TryParse(
+            ReconciliationStatementEndBalance,
+            NumberStyles.Currency,
+            CultureInfo.CurrentCulture,
+            out var statementEndBalance))
+        {
+            WorkspaceMessage = "Enter a valid statement ending balance.";
+            return false;
+        }
+
+        command = new ReconciliationCommand(
+            statementEndDate,
+            statementEndBalance,
+            ReconciliationTransactions
+                .Where(transaction => transaction.CanChange && transaction.IsCleared)
+                .Select(transaction => transaction.JournalLineId)
+                .ToList());
+        return true;
+    }
+
+    private void DisplayReconciliation(ReconciliationPreviewSummary preview)
+    {
+        var selectedIds = ReconciliationTransactions
+            .Where(transaction => transaction.CanChange && transaction.IsCleared)
+            .Select(transaction => transaction.JournalLineId)
+            .ToHashSet();
+
+        ReconciliationTransactions.Clear();
+        foreach (var transaction in preview.Transactions)
+        {
+            var item = new ReconciliationTransactionItemViewModel(transaction);
+            if (item.CanChange && selectedIds.Contains(item.JournalLineId))
+            {
+                item.IsCleared = true;
+            }
+
+            ReconciliationTransactions.Add(item);
+        }
+
+        ReconciliationClearedBalance = preview.ClearedBalance;
+        ReconciliationDifference = preview.Difference;
+    }
+
+    private void RefreshReconciliationAccountOptions()
+    {
+        var selectedId = SelectedReconciliationAccount?.Id;
+        ReconciliationAccountOptions.Clear();
+        foreach (var account in Accounts.Where(account =>
+                     account.IsActive
+                     && account.AccountType is "Asset" or "Liability" or "Equity"))
+        {
+            ReconciliationAccountOptions.Add(account);
+        }
+
+        SelectedReconciliationAccount = ReconciliationAccountOptions
+            .FirstOrDefault(account => account.Id == selectedId)
+            ?? ReconciliationAccountOptions.FirstOrDefault();
+    }
+
+    private void RefreshImportPostingAccountOptions()
+    {
+        var selectedId = SelectedImportPostingAccount?.Id;
+        ImportPostingAccountOptions.Clear();
+        foreach (var account in Accounts.Where(account =>
+                     account.IsActive
+                     && account.AccountType is "Asset" or "Liability" or "Equity"))
+        {
+            ImportPostingAccountOptions.Add(account);
+        }
+
+        SelectedImportPostingAccount = ImportPostingAccountOptions
+            .FirstOrDefault(account => account.Id == selectedId)
+            ?? ImportPostingAccountOptions.FirstOrDefault();
+    }
+
+    private void RefreshImportFeeAccountOptions()
+    {
+        var selectedId = SelectedImportFeeAccount?.Id;
+        ImportFeeAccountOptions.Clear();
+        foreach (var account in Accounts.Where(account =>
+                     account.IsActive && account.AccountType == "Expense"))
+        {
+            ImportFeeAccountOptions.Add(account);
+        }
+
+        SelectedImportFeeAccount = ImportFeeAccountOptions
+            .FirstOrDefault(account => account.Id == selectedId)
+            ?? ImportFeeAccountOptions.FirstOrDefault(account =>
+                account.Name.Contains("fee", StringComparison.OrdinalIgnoreCase))
+            ?? ImportFeeAccountOptions.FirstOrDefault();
     }
 
     private bool TryGetReportRequest(
@@ -1228,6 +1547,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private void RefreshTransactionAccountOptions()
     {
+        RefreshImportPostingAccountOptions();
+        RefreshImportFeeAccountOptions();
+        RefreshReconciliationAccountOptions();
         FromAccountOptions.Clear();
         ToAccountOptions.Clear();
 

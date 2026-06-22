@@ -1,0 +1,156 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:FinancialApp.Desktop.ViewModels"
+             x:Class="FinancialApp.Desktop.Views.ReconciliationView"
+             x:DataType="vm:MainWindowViewModel">
+    <Grid Margin="28,0,28,28"
+          RowDefinitions="Auto,Auto,*"
+          RowSpacing="14">
+        <Border Padding="18"
+                Background="White"
+                BorderBrush="#D8E0E8"
+                BorderThickness="1"
+                CornerRadius="6">
+            <Grid ColumnDefinitions="2*,*,*,Auto"
+                  ColumnSpacing="12">
+                <StackPanel Spacing="5">
+                    <TextBlock Text="Account"
+                               FontWeight="SemiBold"/>
+                    <ComboBox ItemsSource="{Binding ReconciliationAccountOptions}"
+                              SelectedItem="{Binding SelectedReconciliationAccount}"
+                              MinHeight="36">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Name}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="1"
+                            Spacing="5">
+                    <TextBlock Text="Statement ending date"
+                               FontWeight="SemiBold"/>
+                    <TextBox Text="{Binding ReconciliationStatementEndDate}"
+                             PlaceholderText="YYYY-MM-DD"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2"
+                            Spacing="5">
+                    <TextBlock Text="Statement ending balance"
+                               FontWeight="SemiBold"/>
+                    <TextBox Text="{Binding ReconciliationStatementEndBalance}"
+                             PlaceholderText="0.00"/>
+                </StackPanel>
+                <Button Grid.Column="3"
+                        VerticalAlignment="Bottom"
+                        MinHeight="36"
+                        Command="{Binding LoadReconciliationCommand}"
+                        Content="Calculate"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1"
+              ColumnDefinitions="*,*,*"
+              ColumnSpacing="12">
+            <Border Padding="14"
+                    Background="White"
+                    BorderBrush="#D8E0E8"
+                    BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="Cleared balance"
+                               Foreground="#64748B"/>
+                    <TextBlock Text="{Binding ReconciliationClearedBalance, StringFormat='{}{0:C}'}"
+                               FontSize="22"
+                               FontWeight="SemiBold"/>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="1"
+                    Padding="14"
+                    Background="White"
+                    BorderBrush="#D8E0E8"
+                    BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="Difference"
+                               Foreground="#64748B"/>
+                    <TextBlock Text="{Binding ReconciliationDifference, StringFormat='{}{0:C}'}"
+                               FontSize="22"
+                               FontWeight="SemiBold"/>
+                </StackPanel>
+            </Border>
+            <Button Grid.Column="2"
+                    HorizontalAlignment="Stretch"
+                    Command="{Binding CompleteReconciliationCommand}"
+                    Content="Complete reconciliation"
+                    Background="#078CB5"
+                    Foreground="White"/>
+        </Grid>
+
+        <Border Grid.Row="2"
+                Background="White"
+                BorderBrush="#D8E0E8"
+                BorderThickness="1"
+                CornerRadius="6">
+            <Grid RowDefinitions="Auto,*">
+                <Grid ColumnDefinitions="80,110,2*,*,110,110"
+                      Background="#EEF2F6">
+                    <TextBlock Margin="10,8"
+                               Text="Cleared"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="1"
+                               Margin="10,8"
+                               Text="Date"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="2"
+                               Margin="10,8"
+                               Text="Description"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="3"
+                               Margin="10,8"
+                               Text="Other account"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="4"
+                               Margin="10,8"
+                               Text="Debit"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="5"
+                               Margin="10,8"
+                               Text="Credit"
+                               FontWeight="SemiBold"/>
+                </Grid>
+                <ScrollViewer Grid.Row="1">
+                    <ItemsControl ItemsSource="{Binding ReconciliationTransactions}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ReconciliationTransactionItemViewModel">
+                                <Border BorderBrush="#E5EAF0"
+                                        BorderThickness="0,0,0,1">
+                                    <Grid ColumnDefinitions="80,110,2*,*,110,110">
+                                        <CheckBox Margin="10,8"
+                                                  IsChecked="{Binding IsCleared}"
+                                                  IsEnabled="{Binding CanChange}"
+                                                  HorizontalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Margin="10,8"
+                                                   Text="{Binding EntryDate}"/>
+                                        <TextBlock Grid.Column="2"
+                                                   Margin="10,8"
+                                                   Text="{Binding Memo}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Grid.Column="3"
+                                                   Margin="10,8"
+                                                   Text="{Binding OtherAccounts}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Grid.Column="4"
+                                                   Margin="10,8"
+                                                   Text="{Binding Debit, StringFormat='{}{0:C}'}"/>
+                                        <TextBlock Grid.Column="5"
+                                                   Margin="10,8"
+                                                   Text="{Binding Credit, StringFormat='{}{0:C}'}"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

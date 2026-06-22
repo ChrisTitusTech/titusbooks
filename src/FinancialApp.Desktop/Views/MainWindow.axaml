@@ -98,6 +98,11 @@
                             Content="Imports"
                             Command="{Binding NavigateCommand}"
                             CommandParameter="Imports"/>
+                    <Button Classes="nav"
+                            Classes.active="{Binding IsReconciliationPage}"
+                            Content="Reconciliation"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="Reconciliation"/>
 
                     <Border Height="1"
                             Margin="18,12"
@@ -212,6 +217,7 @@
                 <views:TransactionsView IsVisible="{Binding IsTransactionsPage}"/>
                 <views:ImportsView IsVisible="{Binding IsImportsPage}"/>
                 <views:ReportsView IsVisible="{Binding IsReportsPage}"/>
+                <views:ReconciliationView IsVisible="{Binding IsReconciliationPage}"/>
             </Grid>
         </Grid>
     </Grid>

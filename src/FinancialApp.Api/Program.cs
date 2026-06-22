@@ -5,6 +5,7 @@ using FinancialApp.Core.Accounting;
 using FinancialApp.Core.Categorization;
 using FinancialApp.Core.Imports;
 using FinancialApp.Core.Organizations;
+using FinancialApp.Core.Reconciliation;
 using FinancialApp.Data.Database;
 using FinancialApp.Data.Repositories;
 using FinancialApp.Importers;
@@ -23,14 +24,18 @@ if (!string.IsNullOrWhiteSpace(postgresConnectionString))
     builder.Services.AddScoped<IAccountRepository, PostgresAccountRepository>();
     builder.Services.AddScoped<IJournalEntryRepository, PostgresJournalEntryRepository>();
     builder.Services.AddScoped<IImportRepository, PostgresImportRepository>();
+    builder.Services.AddScoped<IImportPostingRepository, PostgresImportPostingRepository>();
     builder.Services.AddScoped<ICategorizationRuleRepository, PostgresCategorizationRuleRepository>();
     builder.Services.AddScoped<IFinancialReportRepository, PostgresFinancialReportRepository>();
+    builder.Services.AddScoped<IReconciliationRepository, PostgresReconciliationRepository>();
     builder.Services.AddScoped<DefaultChartOfAccountsSeeder>();
     builder.Services.AddScoped<AccountingService>();
     builder.Services.AddScoped<FinancialReportService>();
+    builder.Services.AddScoped<ReconciliationService>();
     builder.Services.AddScoped<GenericCsvParser>();
     builder.Services.AddScoped<PayPalCsvParser>();
     builder.Services.AddScoped<CsvImportService>();
+    builder.Services.AddScoped<ImportPostingService>();
     builder.Services.AddSingleton<CategorizationRuleEngine>();
 }
 
@@ -47,6 +52,7 @@ app.MapTransactionEndpoints();
 app.MapReportEndpoints();
 app.MapImportEndpoints();
 app.MapCategorizationRuleEndpoints();
+app.MapReconciliationEndpoints();
 
 app.Run();
 

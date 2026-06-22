@@ -7,5 +7,6 @@ public enum NavigationPage
     Accounts,
     Transactions,
     Imports,
-    Reports
+    Reports,
+    Reconciliation
 }

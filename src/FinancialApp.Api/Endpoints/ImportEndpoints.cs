@@ -156,6 +156,39 @@ public static class ImportEndpoints
             });
         });
 
+        endpoints.MapPost("/organizations/{organizationId:guid}/imports/transactions/post", async (
+            Guid organizationId,
+            PostImportedTransactionsRequest request,
+            [FromServices] IOrganizationRepository organizationRepository,
+            [FromServices] ImportPostingService postingService,
+            CancellationToken cancellationToken) =>
+        {
+            if (!await EndpointGuards.OrganizationExistsAsync(
+                    organizationRepository,
+                    organizationId,
+                    cancellationToken))
+            {
+                return Results.NotFound();
+            }
+
+            try
+            {
+                var result = await postingService.PostAsync(
+                    organizationId,
+                    request.SourceAccountId,
+                    request.TransactionIds ?? [],
+                    request.MerchantFeeAccountId,
+                    cancellationToken);
+                return Results.Ok(new PostImportedTransactionsResponse(
+                    result.PostedCount,
+                    result.JournalEntryIds));
+            }
+            catch (ImportPostingException exception)
+            {
+                return Results.BadRequest(EndpointGuards.Error(exception.Message));
+            }
+        });
+
         return endpoints;
     }
 }
