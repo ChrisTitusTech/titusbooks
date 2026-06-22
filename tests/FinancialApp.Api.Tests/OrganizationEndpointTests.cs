@@ -8,6 +8,7 @@ using FinancialApp.Core.Accounting;
 using FinancialApp.Core.Categorization;
 using FinancialApp.Core.Imports;
 using FinancialApp.Core.Organizations;
+using FinancialApp.Core.Reconciliation;
 using FinancialApp.Importers;
 using FinancialApp.Reports;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -493,6 +494,7 @@ public sealed class OrganizationEndpointTests
                 category.Id,
                 10));
         var rule = await createRuleResponse.Content.ReadFromJsonAsync<CategorizationRuleResponse>();
+        Assert.Equal(organizationId, rule!.OrganizationId);
         var importResponse = await client.PostAsJsonAsync(
             $"/organizations/{organizationId}/imports/csv",
             new CsvImportApiRequest(
@@ -517,6 +519,99 @@ public sealed class OrganizationEndpointTests
         Assert.Equal("categorized", transaction.Status);
         Assert.Equal(category.Id, transaction.CategoryAccountId);
         Assert.Equal(rule.Id, transaction.MatchedRuleId);
+    }
+
+    [Fact]
+    public async Task ReconciliationPreview_CalculatesSelectedClearedBalance()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = await CreateOrganizationAsync(client);
+        var checking = await CreateAccountAsync(client, organizationId, "Checking", "Asset");
+        var income = await CreateAccountAsync(client, organizationId, "Consulting", "Income");
+        var postResponse = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/transactions/income",
+            new PostIncomeRequest(
+                new DateOnly(2026, 6, 15),
+                checking.Id,
+                income.Id,
+                100m,
+                "Client payment"));
+        var entry = await postResponse.Content.ReadFromJsonAsync<JournalEntryResponse>();
+        var checkingLineId = entry!.Lines.Single(line => line.AccountId == checking.Id).Id;
+
+        var response = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/accounts/{checking.Id}/reconciliation/preview",
+            new
+            {
+                StatementEndDate = new DateOnly(2026, 6, 30),
+                StatementEndBalance = 100m,
+                ClearedJournalLineIds = new[] { checkingLineId }
+            });
+        var preview = await response.Content.ReadFromJsonAsync<
+            FinancialApp.Api.Reconciliation.ReconciliationPreviewResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(preview);
+        Assert.Equal(100m, preview.ClearedBalance);
+        Assert.Equal(0m, preview.Difference);
+    }
+
+    [Fact]
+    public async Task CompleteReconciliation_RejectsDifferenceThenProtectsCompletedSelection()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = await CreateOrganizationAsync(client);
+        var checking = await CreateAccountAsync(client, organizationId, "Checking", "Asset");
+        var income = await CreateAccountAsync(client, organizationId, "Consulting", "Income");
+        var postResponse = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/transactions/income",
+            new PostIncomeRequest(
+                new DateOnly(2026, 6, 15),
+                checking.Id,
+                income.Id,
+                100m,
+                "Client payment"));
+        var entry = await postResponse.Content.ReadFromJsonAsync<JournalEntryResponse>();
+        var checkingLineId = entry!.Lines.Single(line => line.AccountId == checking.Id).Id;
+        var path =
+            $"/organizations/{organizationId}/accounts/{checking.Id}/reconciliation/complete";
+
+        var rejected = await client.PostAsJsonAsync(path, new
+        {
+            StatementEndDate = new DateOnly(2026, 6, 30),
+            StatementEndBalance = 99m,
+            ClearedJournalLineIds = new[] { checkingLineId }
+        });
+        var completed = await client.PostAsJsonAsync(path, new
+        {
+            StatementEndDate = new DateOnly(2026, 6, 30),
+            StatementEndBalance = 100m,
+            ClearedJournalLineIds = new[] { checkingLineId }
+        });
+        var completedPreview = await completed.Content.ReadFromJsonAsync<
+            FinancialApp.Api.Reconciliation.ReconciliationPreviewResponse>();
+        var previewResponse = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/accounts/{checking.Id}/reconciliation/preview",
+            new
+            {
+                StatementEndDate = new DateOnly(2026, 6, 30),
+                StatementEndBalance = 100m,
+                ClearedJournalLineIds = Array.Empty<Guid>()
+            });
+        var preview = await previewResponse.Content.ReadFromJsonAsync<
+            FinancialApp.Api.Reconciliation.ReconciliationPreviewResponse>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, completed.StatusCode);
+        Assert.NotNull(completedPreview);
+        Assert.True(completedPreview.Transactions.Single().IsReconciled);
+        Assert.NotNull(preview);
+        Assert.True(preview.Transactions.Single().IsReconciled);
+        Assert.Equal(0m, preview.Difference);
     }
 
     [Fact]
@@ -568,6 +663,50 @@ public sealed class OrganizationEndpointTests
         Assert.Empty(remainingPending!);
     }
 
+    [Fact]
+    public async Task ImportInbox_PostsSelectedTransactionsAndRemovesThemFromCategorizedInbox()
+    {
+        var repositories = new InMemoryRepositories();
+        await using var factory = CreateFactory(repositories);
+        using var client = factory.CreateClient();
+        var organizationId = await CreateOrganizationAsync(client);
+        var checking = await CreateAccountAsync(client, organizationId, "Checking", "Asset");
+        var expense = await CreateAccountAsync(client, organizationId, "Office Supplies", "Expense");
+        await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/imports/csv",
+            new CsvImportApiRequest(
+                "Generic CSV",
+                "fake.csv",
+                "Date,Description,Amount\n2026-06-01,Office store,-42.00",
+                new CsvColumnMappingRequest(
+                    "Date",
+                    "Description",
+                    AmountColumn: "Amount")));
+        var pending = await client.GetFromJsonAsync<List<ImportedTransactionResponse>>(
+            $"/organizations/{organizationId}/imports/transactions?status=pending");
+        await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/imports/transactions/categorize",
+            new CategorizeImportedTransactionsRequest([pending![0].Id], expense.Id));
+
+        var response = await client.PostAsJsonAsync(
+            $"/organizations/{organizationId}/imports/transactions/post",
+            new PostImportedTransactionsRequest([pending[0].Id], checking.Id));
+        var result = await response.Content.ReadFromJsonAsync<PostImportedTransactionsResponse>();
+        var posted = await client.GetFromJsonAsync<List<ImportedTransactionResponse>>(
+            $"/organizations/{organizationId}/imports/transactions?status=posted");
+        var categorized = await client.GetFromJsonAsync<List<ImportedTransactionResponse>>(
+            $"/organizations/{organizationId}/imports/transactions?status=categorized");
+        var register = await client.GetFromJsonAsync<List<AccountRegisterEntryResponse>>(
+            $"/organizations/{organizationId}/accounts/{checking.Id}/register");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(result);
+        Assert.Equal(1, result.PostedCount);
+        Assert.Single(posted!);
+        Assert.Empty(categorized!);
+        Assert.Equal(42m, Assert.Single(register!).Credit);
+    }
+
     private static async Task<Guid> CreateOrganizationAsync(HttpClient client)
     {
         var response = await client.PostAsJsonAsync(
@@ -606,8 +745,12 @@ public sealed class OrganizationEndpointTests
                     services.RemoveAll<IFinancialReportRepository>();
                     services.RemoveAll<FinancialReportService>();
                     services.RemoveAll<IImportRepository>();
+                    services.RemoveAll<IImportPostingRepository>();
+                    services.RemoveAll<ImportPostingService>();
                     services.RemoveAll<ICategorizationRuleRepository>();
                     services.RemoveAll<CategorizationRuleEngine>();
+                    services.RemoveAll<IReconciliationRepository>();
+                    services.RemoveAll<ReconciliationService>();
                     services.RemoveAll<GenericCsvParser>();
                     services.RemoveAll<PayPalCsvParser>();
                     services.RemoveAll<CsvImportService>();
@@ -619,8 +762,12 @@ public sealed class OrganizationEndpointTests
                     services.AddSingleton<IFinancialReportRepository>(repositories);
                     services.AddSingleton<FinancialReportService>();
                     services.AddSingleton<IImportRepository>(repositories);
+                    services.AddSingleton<IImportPostingRepository>(repositories);
+                    services.AddSingleton<ImportPostingService>();
                     services.AddSingleton<ICategorizationRuleRepository>(repositories);
                     services.AddSingleton<CategorizationRuleEngine>();
+                    services.AddSingleton<IReconciliationRepository>(repositories);
+                    services.AddSingleton<ReconciliationService>();
                     services.AddSingleton<GenericCsvParser>();
                     services.AddSingleton<PayPalCsvParser>();
                     services.AddSingleton<CsvImportService>();
@@ -633,13 +780,16 @@ public sealed class OrganizationEndpointTests
         IAccountRepository,
         IJournalEntryRepository,
         IImportRepository,
+        IImportPostingRepository,
         ICategorizationRuleRepository,
-        IFinancialReportRepository
+        IFinancialReportRepository,
+        IReconciliationRepository
     {
         private readonly List<Account> accounts = [];
         private readonly List<JournalEntry> journalEntries = [];
         private readonly List<ImportedTransaction> importedTransactions = [];
         private readonly List<CategorizationRule> categorizationRules = [];
+        private readonly Dictionary<Guid, Guid> reconciliationIdsByJournalLine = [];
 
         public List<Organization> Organizations { get; } = [];
 
@@ -751,6 +901,60 @@ public sealed class OrganizationEndpointTests
             return Task.FromResult<IReadOnlyList<AccountRegisterEntry>>(registerEntries);
         }
 
+        public Task<IReadOnlyList<ReconciliationTransaction>> ListTransactionsAsync(
+            Guid organizationId,
+            Guid accountId,
+            DateOnly statementEndDate,
+            CancellationToken cancellationToken = default)
+        {
+            var transactions = journalEntries
+                .Where(entry =>
+                    entry.OrganizationId == organizationId
+                    && !entry.IsVoid
+                    && entry.EntryDate <= statementEndDate)
+                .SelectMany(entry => entry.Lines
+                    .Where(line => line.AccountId == accountId)
+                    .Select(line => new ReconciliationTransaction(
+                        line.Id,
+                        entry.Id,
+                        entry.EntryDate,
+                        entry.Memo,
+                        line.Debit,
+                        line.Credit,
+                        string.Join(", ", entry.Lines
+                            .Where(otherLine => otherLine.Id != line.Id)
+                            .Select(otherLine => accounts.Single(
+                                account => account.Id == otherLine.AccountId).Name)),
+                        reconciliationIdsByJournalLine.TryGetValue(
+                            line.Id,
+                            out var reconciliationId)
+                                ? reconciliationId
+                                : null)))
+                .OrderBy(transaction => transaction.EntryDate)
+                .ToList();
+
+            return Task.FromResult<IReadOnlyList<ReconciliationTransaction>>(transactions);
+        }
+
+        public Task CompleteAsync(
+            FinancialApp.Core.Reconciliation.Reconciliation reconciliation,
+            IReadOnlyCollection<Guid> journalLineIds,
+            CancellationToken cancellationToken = default)
+        {
+            foreach (var journalLineId in journalLineIds)
+            {
+                if (reconciliationIdsByJournalLine.ContainsKey(journalLineId))
+                {
+                    throw new ReconciliationException(
+                        "One or more selected transactions changed before reconciliation completed.");
+                }
+
+                reconciliationIdsByJournalLine[journalLineId] = reconciliation.Id;
+            }
+
+            return Task.CompletedTask;
+        }
+
         public Task<IReadOnlyList<AccountReportTotal>> ListAccountTotalsAsync(
             Guid organizationId,
             AccountType accountType,
@@ -849,6 +1053,64 @@ public sealed class OrganizationEndpointTests
             }
 
             return Task.FromResult(true);
+        }
+
+        public Task<IReadOnlyList<ImportedTransaction>> ListForPostingAsync(
+            Guid organizationId,
+            IReadOnlyCollection<Guid> transactionIds,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<ImportedTransaction>>(
+                importedTransactions
+                    .Where(transaction =>
+                        transaction.OrganizationId == organizationId
+                        && transactionIds.Contains(transaction.Id))
+                    .ToList());
+        }
+
+        public Task PostAsync(
+            Guid organizationId,
+            IReadOnlyCollection<JournalEntry> entries,
+            IReadOnlyDictionary<Guid, Guid> expectedCategoryAccountIds,
+            CancellationToken cancellationToken = default)
+        {
+            var transactionIds = entries
+                .Select(entry => entry.SourceImportedTransactionId)
+                .OfType<Guid>()
+                .ToHashSet();
+            var matches = importedTransactions
+                .Where(transaction =>
+                    transaction.OrganizationId == organizationId
+                    && transactionIds.Contains(transaction.Id)
+                    && transaction.Status == ImportedTransactionStatus.Categorized)
+                .ToList();
+            if (matches.Count != transactionIds.Count)
+            {
+                throw new ImportPostingException(
+                    "One or more imported transactions changed before posting completed.");
+            }
+            if (matches.Any(transaction =>
+                    transaction.CategoryAccountId is null
+                    || !expectedCategoryAccountIds.TryGetValue(
+                        transaction.Id,
+                        out var expectedCategoryAccountId)
+                    || transaction.CategoryAccountId.Value != expectedCategoryAccountId))
+            {
+                throw new ImportPostingException(
+                    "One or more imported transactions changed before posting completed.");
+            }
+
+            journalEntries.AddRange(entries);
+            foreach (var match in matches)
+            {
+                var index = importedTransactions.IndexOf(match);
+                importedTransactions[index] = match with
+                {
+                    Status = ImportedTransactionStatus.Posted
+                };
+            }
+
+            return Task.CompletedTask;
         }
 
         public Task AddAsync(

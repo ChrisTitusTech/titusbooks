@@ -270,7 +270,7 @@
                                 BorderThickness="0"/>
                     </Grid>
                     <Grid Grid.Row="1"
-                          ColumnDefinitions="130,*,Auto"
+                          ColumnDefinitions="130,*,Auto,*,*,Auto,Auto"
                           ColumnSpacing="8">
                         <ComboBox ItemsSource="{Binding ImportStatusFilters}"
                                   SelectedItem="{Binding SelectedImportStatusFilter}"/>
@@ -284,9 +284,40 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
                         <Button Grid.Column="2"
+                                Command="{Binding CreateRuleFromSelectedImportCommand}"
+                                Content="Create rule"
+                                Background="White"
+                                Foreground="#087EA4"
+                                BorderBrush="#87B7C9"/>
+                        <ComboBox Grid.Column="3"
+                                  MinWidth="140"
+                                  ItemsSource="{Binding ImportPostingAccountOptions}"
+                                  SelectedItem="{Binding SelectedImportPostingAccount}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="api:AccountSummary">
+                                    <TextBlock Text="{Binding Name}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button Grid.Column="4"
                                 Command="{Binding CategorizeSelectedImportsCommand}"
                                 Content="Categorize selected"
                                 Background="#087EA4"
+                                Foreground="White"/>
+                        <ComboBox Grid.Column="5"
+                                  MinWidth="130"
+                                  ItemsSource="{Binding ImportFeeAccountOptions}"
+                                  SelectedItem="{Binding SelectedImportFeeAccount}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="api:AccountSummary">
+                                    <TextBlock Text="{Binding Name}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button Grid.Column="6"
+                                Command="{Binding PostSelectedImportsCommand}"
+                                Content="Post selected"
+                                Background="#176B45"
                                 Foreground="White"/>
                     </Grid>
                     <Border Grid.Row="2"

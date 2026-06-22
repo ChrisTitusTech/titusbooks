@@ -249,7 +249,7 @@ Handle PayPal CSV exports and common PayPal accounting cases.
 
 ## Phase 8: Import Inbox and Categorization Rules
 
-**Status: In Progress**
+**Status: Complete**
 
 ### Goal
 
@@ -275,6 +275,8 @@ Make imports usable by letting users review, categorize, and post transactions.
 - Posted transactions leave pending inbox.
 
 ## Phase 9: Reconciliation
+
+**Status: Complete - sanity verified June 22, 2026**
 
 ### Goal
 

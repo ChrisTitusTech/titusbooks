@@ -203,6 +203,131 @@ public sealed class TitusBooksApiClientTests
         Assert.Equal(425m, report.NetIncome);
     }
 
+    [Fact]
+    public async Task PreviewReconciliationAsync_PostsSelectionAndReturnsDifference()
+    {
+        var organizationId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var accountId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var lineId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal(
+                $"/organizations/{organizationId}/accounts/{accountId}/reconciliation/preview",
+                request.RequestUri?.AbsolutePath);
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    $$"""
+                    {
+                      "accountId":"{{accountId}}",
+                      "statementEndDate":"2026-06-30",
+                      "statementEndBalance":100.00,
+                      "clearedBalance":100.00,
+                      "difference":0.00,
+                      "transactions":[]
+                    }
+                    """)
+            };
+        }))
+        {
+            BaseAddress = new Uri("http://127.0.0.1:5000")
+        };
+        var client = new TitusBooksApiClient(httpClient);
+
+        var preview = await client.PreviewReconciliationAsync(
+            organizationId,
+            accountId,
+            new ReconciliationCommand(
+                new DateOnly(2026, 6, 30),
+                100m,
+                [lineId]));
+
+        Assert.Equal(100m, preview.ClearedBalance);
+        Assert.Equal(0m, preview.Difference);
+    }
+
+    [Fact]
+    public async Task CreateCategorizationRuleAsync_ReturnsCreatedRule()
+    {
+        var organizationId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal(
+                $"/organizations/{organizationId}/categorization-rules",
+                request.RequestUri?.AbsolutePath);
+
+            return new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent(
+                    $$"""
+                    {
+                      "id":"22222222-2222-2222-2222-222222222222",
+                      "organizationId":"{{organizationId}}",
+                      "name":"Office store",
+                      "matchField":"description",
+                      "matchOperator":"contains",
+                      "matchValue":"Office store",
+                      "targetAccountId":"33333333-3333-3333-3333-333333333333",
+                      "priority":100,
+                      "isActive":true
+                    }
+                    """)
+            };
+        }))
+        {
+            BaseAddress = new Uri("http://127.0.0.1:5000")
+        };
+        var client = new TitusBooksApiClient(httpClient);
+
+        var rule = await client.CreateCategorizationRuleAsync(
+            organizationId,
+            new CreateCategorizationRuleCommand(
+                "Office store",
+                "description",
+                "contains",
+                "Office store",
+                Guid.Parse("33333333-3333-3333-3333-333333333333")));
+
+        Assert.Equal("Office store", rule.Name);
+        Assert.Equal("contains", rule.MatchOperator);
+        Assert.Equal(organizationId, rule.OrganizationId);
+    }
+
+    [Fact]
+    public async Task PostImportedTransactionsAsync_ReturnsPostingResult()
+    {
+        var organizationId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal(
+                $"/organizations/{organizationId}/imports/transactions/post",
+                request.RequestUri?.AbsolutePath);
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"postedCount":1,"journalEntryIds":["44444444-4444-4444-4444-444444444444"]}""")
+            };
+        }))
+        {
+            BaseAddress = new Uri("http://127.0.0.1:5000")
+        };
+        var client = new TitusBooksApiClient(httpClient);
+
+        var result = await client.PostImportedTransactionsAsync(
+            organizationId,
+            new PostImportedTransactionsCommand(
+                [Guid.Parse("22222222-2222-2222-2222-222222222222")],
+                Guid.Parse("33333333-3333-3333-3333-333333333333")));
+
+        Assert.Equal(1, result.PostedCount);
+        Assert.Single(result.JournalEntryIds);
+    }
+
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> handler;

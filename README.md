@@ -116,7 +116,7 @@ Or, after filling in `.env`:
 dotnet run --project src/FinancialApp.Migrations/FinancialApp.Migrations.csproj
 ```
 
-The baseline migration creates organizations, accounts, import batches, imported transactions, journal entries, journal lines, categorization rules, and reconciliations. Later migrations add import fingerprint uniqueness, running balances, and PayPal-specific normalized fields.
+The baseline migration creates organizations, accounts, import batches, imported transactions, journal entries, journal lines, categorization rules, and reconciliations. Later migrations add import fingerprint uniqueness, running balances, PayPal-specific normalized fields, import posting protection, and reconciliation state protection.
 
 ## Server Publish
 

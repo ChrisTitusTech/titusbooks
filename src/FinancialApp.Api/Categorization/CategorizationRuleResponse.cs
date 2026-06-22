@@ -4,6 +4,7 @@ namespace FinancialApp.Api.Categorization;
 
 public sealed record CategorizationRuleResponse(
     Guid Id,
+    Guid OrganizationId,
     string Name,
     string MatchField,
     string MatchOperator,
@@ -16,6 +17,7 @@ public sealed record CategorizationRuleResponse(
     {
         return new CategorizationRuleResponse(
             rule.Id,
+            rule.OrganizationId,
             rule.Name,
             rule.MatchField,
             CategorizationRuleOperatorNames.ToStorageValue(rule.MatchOperator),
