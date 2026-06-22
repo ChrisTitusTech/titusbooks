@@ -276,7 +276,7 @@ Make imports usable by letting users review, categorize, and post transactions.
 
 ## Phase 9: Reconciliation
 
-**Status: Complete and verified against the configured PostgreSQL environment**
+**Status: Complete - sanity verified June 22, 2026**
 
 ### Goal
 

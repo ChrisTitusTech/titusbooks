@@ -177,6 +177,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private int accountLoadVersion;
     private int dashboardLoadVersion;
     private int importLoadVersion;
+    private int reconciliationLoadVersion;
 
     public MainWindowViewModel()
         : this(new AppSettings())
@@ -1047,6 +1048,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     public async Task LoadReconciliationAsync()
     {
+        var loadVersion = Interlocked.Increment(ref reconciliationLoadVersion);
         if (!TryCreateReconciliationCommand(out var organizationId, out var accountId, out var command))
         {
             ReconciliationTransactions.Clear();
@@ -1061,6 +1063,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 organizationId,
                 accountId,
                 command);
+            if (loadVersion != reconciliationLoadVersion)
+            {
+                return;
+            }
+
             DisplayReconciliation(preview);
             WorkspaceMessage = preview.Difference == 0
                 ? "Reconciliation is balanced and ready to complete."
@@ -1068,7 +1075,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
         {
-            WorkspaceMessage = exception.Message;
+            if (loadVersion == reconciliationLoadVersion)
+            {
+                WorkspaceMessage = exception.Message;
+            }
         }
     }
 
@@ -1225,6 +1235,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ReconciliationTransactions.Clear();
         Interlocked.Increment(ref dashboardLoadVersion);
         Interlocked.Increment(ref importLoadVersion);
+        Interlocked.Increment(ref reconciliationLoadVersion);
         ClearDashboard();
         ClearReport();
         RefreshTransactionAccountOptions();

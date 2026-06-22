@@ -26,6 +26,8 @@ public sealed class ImportPostingServiceTests
 
         Assert.Equal(2, result.PostedCount);
         Assert.Equal(2, postingRepository.Entries.Count);
+        Assert.Equal(expenseAccountId, postingRepository.ExpectedCategoryAccountIds[expense.Id]);
+        Assert.Equal(incomeAccountId, postingRepository.ExpectedCategoryAccountIds[income.Id]);
         Assert.All(postingRepository.Entries, entry => Assert.True(entry.IsBalanced));
         Assert.Contains(
             postingRepository.Entries.Single(entry =>
@@ -144,6 +146,9 @@ public sealed class ImportPostingServiceTests
     {
         public List<JournalEntry> Entries { get; } = [];
 
+        public IReadOnlyDictionary<Guid, Guid> ExpectedCategoryAccountIds { get; private set; }
+            = new Dictionary<Guid, Guid>();
+
         public Task<IReadOnlyList<ImportedTransaction>> ListForPostingAsync(
             Guid organizationId,
             IReadOnlyCollection<Guid> transactionIds,
@@ -160,9 +165,11 @@ public sealed class ImportPostingServiceTests
         public Task PostAsync(
             Guid organizationId,
             IReadOnlyCollection<JournalEntry> journalEntries,
+            IReadOnlyDictionary<Guid, Guid> expectedCategoryAccountIds,
             CancellationToken cancellationToken = default)
         {
             Entries.AddRange(journalEntries);
+            ExpectedCategoryAccountIds = expectedCategoryAccountIds;
             return Task.CompletedTask;
         }
     }

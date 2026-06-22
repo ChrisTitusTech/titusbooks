@@ -106,7 +106,14 @@ public sealed class ImportPostingService
                 merchantFeeAccount));
         }
 
-        await postingRepository.PostAsync(organizationId, entries, cancellationToken);
+        var expectedCategoryAccountIds = transactions.ToDictionary(
+            transaction => transaction.Id,
+            transaction => transaction.CategoryAccountId!.Value);
+        await postingRepository.PostAsync(
+            organizationId,
+            entries,
+            expectedCategoryAccountIds,
+            cancellationToken);
         return new ImportPostingResult(
             entries.Count,
             entries.Select(entry => entry.Id).ToList());

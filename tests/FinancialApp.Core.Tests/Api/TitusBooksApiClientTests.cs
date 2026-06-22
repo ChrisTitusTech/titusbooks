@@ -293,6 +293,7 @@ public sealed class TitusBooksApiClientTests
 
         Assert.Equal("Office store", rule.Name);
         Assert.Equal("contains", rule.MatchOperator);
+        Assert.Equal(organizationId, rule.OrganizationId);
     }
 
     [Fact]

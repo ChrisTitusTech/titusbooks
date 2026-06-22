@@ -96,6 +96,10 @@ public sealed class ReconciliationServiceTests
         Assert.Equal(0m, result.Difference);
         Assert.NotNull(repository.CompletedReconciliation);
         Assert.Equal([selectedLineId], repository.CompletedJournalLineIds);
+        Assert.True(result.Transactions.Single().IsReconciled);
+        Assert.Equal(
+            repository.CompletedReconciliation.Id,
+            result.Transactions.Single().ReconciliationId);
     }
 
     [Fact]

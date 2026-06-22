@@ -12,5 +12,6 @@ public interface IImportPostingRepository
     Task PostAsync(
         Guid organizationId,
         IReadOnlyCollection<JournalEntry> journalEntries,
+        IReadOnlyDictionary<Guid, Guid> expectedCategoryAccountIds,
         CancellationToken cancellationToken = default);
 }

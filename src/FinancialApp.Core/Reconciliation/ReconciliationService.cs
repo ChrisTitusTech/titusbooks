@@ -106,7 +106,15 @@ public sealed class ReconciliationService
             clearedJournalLineIds.Distinct().ToList(),
             cancellationToken);
 
-        return preview;
+        var completedIds = clearedJournalLineIds.ToHashSet();
+        return preview with
+        {
+            Transactions = preview.Transactions
+                .Select(transaction => completedIds.Contains(transaction.JournalLineId)
+                    ? transaction with { ReconciliationId = reconciliation.Id }
+                    : transaction)
+                .ToList()
+        };
     }
 
     private async Task<Account> GetReconcilableAccountAsync(

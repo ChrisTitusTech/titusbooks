@@ -73,6 +73,7 @@ public sealed class PostgresImportPostingRepository : IImportPostingRepository
     public async Task PostAsync(
         Guid organizationId,
         IReadOnlyCollection<JournalEntry> journalEntries,
+        IReadOnlyDictionary<Guid, Guid> expectedCategoryAccountIds,
         CancellationToken cancellationToken = default)
     {
         if (journalEntries.Count == 0)
@@ -81,7 +82,9 @@ public sealed class PostgresImportPostingRepository : IImportPostingRepository
         }
 
         const string lockSql = """
-            SELECT id
+            SELECT
+                id,
+                category_account_id AS CategoryAccountId
             FROM imported_transactions
             WHERE organization_id = @OrganizationId
               AND id = ANY(@TransactionIds)
@@ -149,17 +152,26 @@ public sealed class PostgresImportPostingRepository : IImportPostingRepository
             throw new ImportPostingException(
                 "Each imported transaction must create exactly one journal entry.");
         }
+        if (expectedCategoryAccountIds.Count != transactionIds.Length
+            || transactionIds.Any(transactionId =>
+                !expectedCategoryAccountIds.ContainsKey(transactionId)))
+        {
+            throw new ImportPostingException(
+                "Each imported transaction must include its reviewed category.");
+        }
 
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         await using var databaseTransaction = await connection.BeginTransactionAsync(cancellationToken);
         try
         {
-            var eligibleIds = await connection.QueryAsync<Guid>(new CommandDefinition(
+            var eligibleRows = (await connection.QueryAsync<LockedImportRow>(new CommandDefinition(
                 lockSql,
                 new { OrganizationId = organizationId, TransactionIds = transactionIds },
                 databaseTransaction,
-                cancellationToken: cancellationToken));
-            if (eligibleIds.Count() != transactionIds.Length)
+                cancellationToken: cancellationToken))).ToList();
+            if (eligibleRows.Count != transactionIds.Length
+                || eligibleRows.Any(row =>
+                    expectedCategoryAccountIds[row.Id] != row.CategoryAccountId))
             {
                 throw new ImportPostingException(
                     "One or more imported transactions changed before posting completed.");
@@ -222,6 +234,8 @@ public sealed class PostgresImportPostingRepository : IImportPostingRepository
             throw;
         }
     }
+
+    private sealed record LockedImportRow(Guid Id, Guid CategoryAccountId);
 
     private sealed record ImportedTransactionRow(
         Guid Id,

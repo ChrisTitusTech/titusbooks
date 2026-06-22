@@ -494,6 +494,7 @@ public sealed class OrganizationEndpointTests
                 category.Id,
                 10));
         var rule = await createRuleResponse.Content.ReadFromJsonAsync<CategorizationRuleResponse>();
+        Assert.Equal(organizationId, rule!.OrganizationId);
         var importResponse = await client.PostAsJsonAsync(
             $"/organizations/{organizationId}/imports/csv",
             new CsvImportApiRequest(
@@ -591,6 +592,8 @@ public sealed class OrganizationEndpointTests
             StatementEndBalance = 100m,
             ClearedJournalLineIds = new[] { checkingLineId }
         });
+        var completedPreview = await completed.Content.ReadFromJsonAsync<
+            FinancialApp.Api.Reconciliation.ReconciliationPreviewResponse>();
         var previewResponse = await client.PostAsJsonAsync(
             $"/organizations/{organizationId}/accounts/{checking.Id}/reconciliation/preview",
             new
@@ -604,6 +607,8 @@ public sealed class OrganizationEndpointTests
 
         Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
         Assert.Equal(HttpStatusCode.OK, completed.StatusCode);
+        Assert.NotNull(completedPreview);
+        Assert.True(completedPreview.Transactions.Single().IsReconciled);
         Assert.NotNull(preview);
         Assert.True(preview.Transactions.Single().IsReconciled);
         Assert.Equal(0m, preview.Difference);
@@ -1066,6 +1071,7 @@ public sealed class OrganizationEndpointTests
         public Task PostAsync(
             Guid organizationId,
             IReadOnlyCollection<JournalEntry> entries,
+            IReadOnlyDictionary<Guid, Guid> expectedCategoryAccountIds,
             CancellationToken cancellationToken = default)
         {
             var transactionIds = entries
@@ -1079,6 +1085,16 @@ public sealed class OrganizationEndpointTests
                     && transaction.Status == ImportedTransactionStatus.Categorized)
                 .ToList();
             if (matches.Count != transactionIds.Count)
+            {
+                throw new ImportPostingException(
+                    "One or more imported transactions changed before posting completed.");
+            }
+            if (matches.Any(transaction =>
+                    transaction.CategoryAccountId is null
+                    || !expectedCategoryAccountIds.TryGetValue(
+                        transaction.Id,
+                        out var expectedCategoryAccountId)
+                    || transaction.CategoryAccountId.Value != expectedCategoryAccountId))
             {
                 throw new ImportPostingException(
                     "One or more imported transactions changed before posting completed.");
