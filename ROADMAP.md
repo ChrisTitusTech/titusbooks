@@ -332,27 +332,7 @@ Harden the app before external API integrations.
 - TLS configuration is documented and should be enabled before exposing the API to shared or untrusted networks.
 - The deployed API and PostgreSQL health checks, accounts, reports, imports, validation, and reconciliation preview were sanity verified without changing financial data.
 
-## Phase 11: API Integrations Later
-
-### Goal
-
-Add optional automatic sync after CSV import workflow is stable.
-
-### Tasks
-
-- Evaluate Plaid integration for Bank of America sync.
-- Evaluate PayPal Transaction Search API for PayPal sync.
-- Add OAuth/token storage model.
-- Add sync logs.
-- Add conflict/duplicate resolution.
-
-### Acceptance Criteria
-
-- API sync does not bypass staging inbox.
-- No bank usernames/passwords are stored.
-- Token storage uses OS credential store or encrypted storage.
-
-## Phase 12: Packaging and Distribution
+## Phase 11: Packaging and Distribution
 
 ### Goal
 
@@ -373,19 +353,87 @@ Prepare app for real use.
 - User can configure API connection.
 - User can back up and restore the database using documented steps.
 
-## Phase 13: Deferred Advanced Features
+## Phase 12: Deferred Advanced Features
 
 Only after the above is stable, consider:
 
-- Invoicing.
+### Accounting Operations
+
+- Customer and vendor management.
+- Accounts receivable workflows:
+  - estimates/quotes
+  - invoices
+  - customer payments and deposits
+  - credit memos and refunds
+  - aging reports and collections status
+- Accounts payable workflows:
+  - bills
+  - vendor credits
+  - bill payments
+  - purchase orders
+  - aging reports
+- Deposit batching and undeposited funds.
+- Adjusting journal entries (AJEs) with attachments, explanations, approvals, and reversal support.
+- Recurring transactions.
+- Period close/lock dates and accountant review workflow.
+- Fixed assets and depreciation.
+- Budgeting and budget-to-actual reporting.
+- Sales tax tracking and filing support.
+
+### Inventory, Orders, and Fulfillment
+
+- Item/product catalog.
+- Inventory quantities, adjustments, costing, and valuation.
+- Sales orders and purchase orders.
+- Pick/pack/ship and fulfillment status.
+- Bills of lading (BOLs), shipments, and carrier details.
+- Returns and inventory corrections.
+
+### Controls and Collaboration
+
+- Approval workflows with configurable thresholds.
+- Multi-user permissions and role-based access.
+- Separation-of-duties controls.
+- Advanced audit logs and change history.
+- Email and in-app notifications for approvals, overdue items, import failures, and reconciliation reminders.
+
+### Reporting
+
+- Balance sheet.
+- Cash flow statement.
+- Trial balance.
+- General ledger.
+- Accounts receivable and accounts payable aging.
+- Inventory valuation.
+- Sales, purchasing, deposit, and approval-status reports.
+- Custom report filters, saved views, and scheduled delivery.
+
+### Other Deferred Capabilities
+
 - Receipt attachments.
 - Receipt OCR.
 - Accountant export package.
-- Balance sheet.
-- Cash flow statement.
 - Multi-company support improvements.
 - Cloud sync.
-- Multi-user permissions.
-- Role-based access.
-- Advanced audit logs.
 - AI-assisted categorization.
+
+## Future Integrations
+
+External integrations are intentionally outside the numbered delivery phases. Add them only after the file-import, staging, security, and packaging workflows are stable.
+
+### Bank and Payment Feeds
+
+- Evaluate Plaid for Bank of America and other supported bank feeds.
+- Evaluate the PayPal Transaction Search API for PayPal sync.
+- Keep all fetched transactions in the existing import staging inbox before posting.
+- Add OAuth/token storage using OS credential storage or encrypted server-side storage.
+- Add sync history, health status, retry behavior, and actionable error reporting.
+- Add conflict and duplicate resolution across API feeds and file imports.
+- Never store bank usernames or passwords.
+
+### Later Integration Candidates
+
+- Transactional email provider for notifications and scheduled reports.
+- E-commerce and payment processors.
+- Shipping/carrier services for fulfillment and BOL workflows.
+- Tax preparation/export services.
