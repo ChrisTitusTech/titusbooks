@@ -7,9 +7,58 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled">
         <Grid Margin="32,0,32,32"
-              RowDefinitions="Auto,Auto"
+              RowDefinitions="Auto,Auto,Auto"
               RowSpacing="24">
-            <Grid ColumnDefinitions="*,Auto"
+            <Border Padding="20"
+                    Background="White"
+                    BorderBrush="#CBD5E1"
+                    BorderThickness="1"
+                    CornerRadius="6">
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto"
+                      RowSpacing="12">
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="Secure API connection"
+                                   FontSize="17"
+                                   FontWeight="SemiBold"
+                                   Foreground="#0F172A"/>
+                        <TextBlock Text="The desktop app stores this API address only. PostgreSQL credentials stay on the API host."
+                                   TextWrapping="Wrap"
+                                   Foreground="#475569"/>
+                    </StackPanel>
+
+                    <Grid Grid.Row="1"
+                          ColumnDefinitions="*,Auto"
+                          ColumnSpacing="12">
+                        <TextBox MinHeight="42"
+                                 PlaceholderText="https://books.example.com"
+                                 Text="{Binding ApiBaseUrl}"
+                                 Background="White"
+                                 Foreground="#111827"
+                                 BorderBrush="#94A3B8"/>
+                        <Button Grid.Column="1"
+                                MinHeight="42"
+                                MinWidth="140"
+                                Command="{Binding SaveApiSettingsCommand}"
+                                Content="Save API URL"
+                                Background="#2563EB"
+                                Foreground="White"/>
+                    </Grid>
+
+                    <CheckBox Grid.Row="2"
+                              IsChecked="{Binding AllowInsecureRemoteHttp}"
+                              Content="Allow HTTP to another computer (development only)"
+                              Foreground="#334155"/>
+
+                    <TextBlock Grid.Row="3"
+                               Text="{Binding ApiTransportMessage}"
+                               TextWrapping="Wrap"
+                               FontSize="12"
+                               Foreground="#9A3412"/>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="1"
+                  ColumnDefinitions="*,Auto"
                   ColumnSpacing="12">
                 <TextBox MinHeight="42"
                          PlaceholderText="Company name"
@@ -26,7 +75,7 @@
                         Foreground="White"/>
             </Grid>
 
-            <Grid Grid.Row="1"
+            <Grid Grid.Row="2"
                   RowDefinitions="Auto,*"
                   RowSpacing="10"
                   MinHeight="390">

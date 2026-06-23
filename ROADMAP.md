@@ -301,6 +301,8 @@ Allow users to reconcile account balances to statements.
 
 ## Phase 10: Security and Credential Storage
 
+**Status: Complete - release tests, deployment, and server sanity verification completed June 23, 2026**
+
 ### Goal
 
 Harden the app before external API integrations.
@@ -322,6 +324,13 @@ Harden the app before external API integrations.
 - Logs do not contain passwords or tokens.
 - API deployment can configure PostgreSQL SSL mode.
 - User can configure API endpoint.
+
+### Completion Notes
+
+- Desktop settings persist only the API endpoint and transport preferences.
+- Remote HTTP requires an explicit user override and is acceptable only on a trusted, isolated LAN/VPN.
+- TLS configuration is documented and should be enabled before exposing the API to shared or untrusted networks.
+- The deployed API and PostgreSQL health checks, accounts, reports, imports, validation, and reconciliation preview were sanity verified without changing financial data.
 
 ## Phase 11: API Integrations Later
 

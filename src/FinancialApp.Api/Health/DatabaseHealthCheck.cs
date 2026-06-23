@@ -35,7 +35,9 @@ public sealed class DatabaseHealthCheck
         }
         catch (Exception exception) when (exception is NpgsqlException or TimeoutException or OperationCanceledException)
         {
-            logger.LogWarning(exception, "Database health check failed.");
+            logger.LogWarning(
+                "Database health check failed with {ExceptionType}.",
+                exception.GetType().Name);
             return DatabaseHealthResult.Unhealthy("Database connection failed.");
         }
     }

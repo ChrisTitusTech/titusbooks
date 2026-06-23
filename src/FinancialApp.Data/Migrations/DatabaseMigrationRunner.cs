@@ -22,7 +22,6 @@ public sealed class DatabaseMigrationRunner
             .WithScriptsEmbeddedInAssembly(
                 Assembly.GetExecutingAssembly(),
                 scriptName => scriptName.Contains(".Migrations.", StringComparison.Ordinal))
-            .LogToConsole()
             .Build();
 
         var result = upgradeEngine.PerformUpgrade();

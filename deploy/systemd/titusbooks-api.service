@@ -11,6 +11,11 @@ Restart=always
 RestartSec=5
 User=titus
 Group=titus
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
 
 [Install]
 WantedBy=multi-user.target

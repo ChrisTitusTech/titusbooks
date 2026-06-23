@@ -122,7 +122,7 @@
                                TextWrapping="Wrap"
                                FontSize="11"
                                Foreground="#C9D6E3"/>
-                    <TextBlock Text="{Binding DatabaseSummary}"
+                    <TextBlock Text="{Binding ApiEndpointSummary}"
                                TextWrapping="Wrap"
                                FontSize="10"
                                Foreground="#83A1B7"/>

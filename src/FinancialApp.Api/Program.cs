@@ -1,4 +1,5 @@
 using FinancialApp.Api.Endpoints;
+using FinancialApp.Api.Errors;
 using FinancialApp.Api.Health;
 using FinancialApp.Api.Startup;
 using FinancialApp.Core.Accounting;
@@ -13,6 +14,8 @@ using FinancialApp.Reports;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<DatabaseHealthCheck>();
 builder.Services.AddSingleton<DatabaseMigrationStartupTask>();
 
@@ -40,6 +43,8 @@ if (!string.IsNullOrWhiteSpace(postgresConnectionString))
 }
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 app.Services
     .GetRequiredService<DatabaseMigrationStartupTask>()

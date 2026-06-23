@@ -29,7 +29,8 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var configuration = BuildConfiguration();
+            var userSettingsPath = GetUserSettingsPath();
+            var configuration = BuildConfiguration(userSettingsPath);
             var settings = configuration.Get<AppSettings>() ?? new AppSettings();
             using var loggerFactory = LoggerFactory.Create(builder =>
             {
@@ -50,7 +51,8 @@ public partial class App : Application
                 settings,
                 new TitusBooksApiClient(apiHttpClient),
                 reportFileSaver,
-                importFilePicker);
+                importFilePicker,
+                new UserSettingsStore(userSettingsPath));
             _ = CheckApiHealthAsync(apiHttpClient, viewModel);
             _ = viewModel.InitializeAsync();
 
@@ -66,12 +68,23 @@ public partial class App : Application
 
     private static HttpClient CreateApiHttpClient(AppSettings settings)
     {
-        if (!Uri.TryCreate(settings.Api.BaseUrl, UriKind.Absolute, out var baseUri))
+        try
+        {
+            var baseUri = ApiEndpointValidator.Validate(
+                settings.Api.BaseUrl,
+                settings.Api.AllowInsecureRemoteHttp);
+            var timeoutSeconds = Math.Clamp(settings.Api.RequestTimeoutSeconds, 5, 300);
+
+            return new HttpClient
+            {
+                BaseAddress = baseUri,
+                Timeout = TimeSpan.FromSeconds(timeoutSeconds),
+            };
+        }
+        catch (ArgumentException)
         {
             return new HttpClient();
         }
-
-        return new HttpClient { BaseAddress = baseUri };
     }
 
     private static async Task CheckApiHealthAsync(HttpClient httpClient, MainWindowViewModel viewModel)
@@ -80,7 +93,7 @@ public partial class App : Application
         await viewModel.CheckApiHealthAsync(apiHealthClient);
     }
 
-    private static IConfiguration BuildConfiguration()
+    private static IConfiguration BuildConfiguration(string userSettingsPath)
     {
         var currentDirectory = Directory.GetCurrentDirectory();
         var applicationDirectory = AppContext.BaseDirectory;
@@ -93,6 +106,13 @@ public partial class App : Application
             .AddJsonFile(Path.Combine(currentDirectory, "appsettings.json"), optional: true, reloadOnChange: true)
             .AddJsonFile(Path.Combine(currentDirectory, "appsettings.Local.json"), optional: true, reloadOnChange: true)
             .AddJsonFile(projectLocalSettings, optional: true, reloadOnChange: true)
+            .AddJsonFile(userSettingsPath, optional: true, reloadOnChange: true)
             .Build();
+    }
+
+    private static string GetUserSettingsPath()
+    {
+        var applicationData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        return Path.Combine(applicationData, "TitusBooks", "settings.json");
     }
 }

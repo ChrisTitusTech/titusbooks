@@ -41,4 +41,18 @@ public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Pr
         Assert.Equal("unhealthy", body.Status);
         Assert.Equal("Database connection string is not configured.", body.Message);
     }
+
+    [Fact]
+    public async Task UnhandledErrors_ReturnSanitizedResponse()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/organizations");
+        var responseBody = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Contains("The request could not be completed.", responseBody);
+        Assert.DoesNotContain("IOrganizationRepository", responseBody);
+        Assert.DoesNotContain("connection string", responseBody, StringComparison.OrdinalIgnoreCase);
+    }
 }

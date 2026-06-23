@@ -180,19 +180,19 @@ public sealed class ImportPostingService
         else
         {
             lines = categoryAccount.AccountType switch
-        {
-            AccountType.Expense => transaction.Amount < 0
-                ? Lines(categoryAccount.Id, sourceAccount.Id, amount, memo)
-                : Lines(sourceAccount.Id, categoryAccount.Id, amount, memo),
-            AccountType.Income => transaction.Amount > 0
-                ? Lines(sourceAccount.Id, categoryAccount.Id, amount, memo)
-                : Lines(categoryAccount.Id, sourceAccount.Id, amount, memo),
-            AccountType.Asset or AccountType.Liability or AccountType.Equity =>
-                transaction.Amount > 0
+            {
+                AccountType.Expense => transaction.Amount < 0
+                    ? Lines(categoryAccount.Id, sourceAccount.Id, amount, memo)
+                    : Lines(sourceAccount.Id, categoryAccount.Id, amount, memo),
+                AccountType.Income => transaction.Amount > 0
                     ? Lines(sourceAccount.Id, categoryAccount.Id, amount, memo)
                     : Lines(categoryAccount.Id, sourceAccount.Id, amount, memo),
-            _ => throw new ImportPostingException("Category account type is not supported.")
-        };
+                AccountType.Asset or AccountType.Liability or AccountType.Equity =>
+                    transaction.Amount > 0
+                        ? Lines(sourceAccount.Id, categoryAccount.Id, amount, memo)
+                        : Lines(categoryAccount.Id, sourceAccount.Id, amount, memo),
+                _ => throw new ImportPostingException("Category account type is not supported.")
+            };
         }
         var entry = new JournalEntryDraft
         {

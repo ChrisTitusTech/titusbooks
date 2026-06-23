@@ -26,7 +26,7 @@ var result = runner.Run();
 
 if (!result.Succeeded)
 {
-    logger.LogError("Database migrations failed: {ErrorMessage}", result.ErrorMessage);
+    logger.LogError("{ErrorMessage}", result.ErrorMessage);
     return 1;
 }
 
@@ -50,8 +50,6 @@ static string? GetConnectionString(string[] args, IConfiguration configuration, 
     }
 
     return configuration["ConnectionString"]
-        ?? configuration.GetConnectionString("Default")
-        ?? configuration["Database:ConnectionString"]
         ?? dotEnvConnectionString;
 }
 

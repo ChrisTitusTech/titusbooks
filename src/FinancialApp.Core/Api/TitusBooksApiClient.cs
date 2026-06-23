@@ -453,11 +453,11 @@ public sealed class TitusBooksApiClient
                 responseBody,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-            return string.IsNullOrWhiteSpace(error?.Error) ? responseBody : error.Error;
+            return string.IsNullOrWhiteSpace(error?.Error) ? null : error.Error;
         }
         catch (JsonException)
         {
-            return responseBody;
+            return null;
         }
     }
 

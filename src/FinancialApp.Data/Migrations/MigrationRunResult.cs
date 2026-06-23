@@ -6,6 +6,10 @@ public sealed record MigrationRunResult(bool Succeeded, string? ErrorMessage)
 
     public static MigrationRunResult Failure(Exception? exception)
     {
-        return new(false, exception?.Message ?? "Database migration failed.");
+        return new(
+            false,
+            exception is null
+                ? "Database migration failed."
+                : $"Database migration failed with {exception.GetType().Name}.");
     }
 }

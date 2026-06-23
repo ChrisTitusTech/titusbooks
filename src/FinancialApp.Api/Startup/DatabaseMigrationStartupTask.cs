@@ -35,7 +35,7 @@ public sealed class DatabaseMigrationStartupTask
 
         if (!result.Succeeded)
         {
-            throw new InvalidOperationException($"Database migrations failed: {result.ErrorMessage}");
+            throw new InvalidOperationException("Database migrations failed. Review the API host logs.");
         }
 
         logger.LogInformation("Database migrations completed.");

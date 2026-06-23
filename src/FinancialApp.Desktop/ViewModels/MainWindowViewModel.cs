@@ -23,6 +23,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private string workspaceMessage = "Load or create an organization to begin.";
 
     [ObservableProperty]
+    private string apiBaseUrl = string.Empty;
+
+    [ObservableProperty]
+    private bool allowInsecureRemoteHttp;
+
+    [ObservableProperty]
     private string newOrganizationName = string.Empty;
 
     [ObservableProperty]
@@ -172,6 +178,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly TitusBooksApiClient? apiClient;
     private readonly IReportFileSaver? reportFileSaver;
     private readonly IImportFilePicker? importFilePicker;
+    private readonly UserSettingsStore? userSettingsStore;
+    private readonly int apiRequestTimeoutSeconds;
     private string? importCsvContent;
     private bool skipBalanceOnlyImportRows;
     private int accountLoadVersion;
@@ -188,18 +196,28 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         AppSettings settings,
         TitusBooksApiClient? apiClient = null,
         IReportFileSaver? reportFileSaver = null,
-        IImportFilePicker? importFilePicker = null)
+        IImportFilePicker? importFilePicker = null,
+        UserSettingsStore? userSettingsStore = null)
     {
         this.apiClient = apiClient;
         this.reportFileSaver = reportFileSaver;
         this.importFilePicker = importFilePicker;
+        this.userSettingsStore = userSettingsStore;
+        apiRequestTimeoutSeconds = settings.Api.RequestTimeoutSeconds;
         Title = settings.ApplicationName;
-        DatabaseSummary = $"API target: {settings.Api.BaseUrl}";
+        ApiBaseUrl = settings.Api.BaseUrl;
+        AllowInsecureRemoteHttp = settings.Api.AllowInsecureRemoteHttp;
+        ApiEndpointSummary = $"API target: {settings.Api.BaseUrl}";
     }
 
     public string Title { get; }
 
-    public string DatabaseSummary { get; }
+    public string ApiEndpointSummary { get; }
+
+    public string ApiTransportMessage =>
+        AllowInsecureRemoteHttp
+            ? "Remote HTTP is enabled. Use this only on a trusted development network."
+            : "HTTPS is required when the API is not running on this computer.";
 
     public string PageTitle => CurrentPage switch
     {
@@ -356,6 +374,38 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         await LoadOrganizationsAsync();
         await LoadDashboardAsync();
+    }
+
+    [RelayCommand]
+    private async Task SaveApiSettingsAsync()
+    {
+        if (userSettingsStore is null)
+        {
+            WorkspaceMessage = "User settings storage is not available.";
+            return;
+        }
+
+        try
+        {
+            var endpoint = ApiEndpointValidator.Validate(ApiBaseUrl, AllowInsecureRemoteHttp);
+            var settings = new ApiSettings
+            {
+                BaseUrl = endpoint.AbsoluteUri.TrimEnd('/'),
+                RequestTimeoutSeconds = apiRequestTimeoutSeconds,
+                AllowInsecureRemoteHttp = AllowInsecureRemoteHttp,
+            };
+
+            await userSettingsStore.SaveApiSettingsAsync(settings);
+            ApiBaseUrl = settings.BaseUrl;
+            WorkspaceMessage = "API settings saved. Restart TitusBooks to use the new endpoint.";
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            or IOException
+            or UnauthorizedAccessException)
+        {
+            WorkspaceMessage = exception.Message;
+        }
     }
 
     private async Task LoadDashboardAsync()
@@ -1187,6 +1237,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 WorkspaceMessage = exception.Message;
             }
         }
+    }
+
+    partial void OnAllowInsecureRemoteHttpChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ApiTransportMessage));
     }
 
     private void ReplaceAccount(AccountSummary account)
