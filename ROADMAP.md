@@ -332,7 +332,34 @@ Harden the app before external API integrations.
 - TLS configuration is documented and should be enabled before exposing the API to shared or untrusted networks.
 - The deployed API and PostgreSQL health checks, accounts, reports, imports, validation, and reconciliation preview were sanity verified without changing financial data.
 
-## Phase 11: Packaging and Distribution
+## Phase 11: Core Accounting Completion
+
+### Goal
+
+Complete the baseline accounting capabilities expected of accounting software before adding broader operational workflows.
+
+The chart of accounts, journal entries, journal lines, double-entry enforcement, account registers, and initial P&L reporting were implemented in earlier phases. This phase fills the remaining presentation and period-control gaps in that accounting foundation.
+
+### Tasks
+
+- Add a formal General Ledger report with account, date, and entry filters.
+- Add a Trial Balance report.
+- Add a Balance Sheet report.
+- Add a journal entry list/detail view with source and reversal links.
+- Add basic adjusting journal entry (AJE) entry and reversal support.
+- Add accounting period close/lock dates with controlled reopening.
+- Add CSV export for the new reports.
+
+### Acceptance Criteria
+
+- General Ledger totals trace back to balanced posted journal entries.
+- Trial Balance debits equal credits.
+- Balance Sheet satisfies assets = liabilities + equity.
+- AJEs cannot post unless balanced.
+- Closed periods reject ordinary posting or destructive changes.
+- Authorized reopening is recorded in the audit history.
+
+## Phase 12: Packaging and Distribution
 
 ### Goal
 
@@ -353,7 +380,7 @@ Prepare app for real use.
 - User can configure API connection.
 - User can back up and restore the database using documented steps.
 
-## Phase 12: Deferred Advanced Features
+## Phase 13: Deferred Advanced Features
 
 Only after the above is stable, consider:
 
@@ -373,9 +400,9 @@ Only after the above is stable, consider:
   - purchase orders
   - aging reports
 - Deposit batching and undeposited funds.
-- Adjusting journal entries (AJEs) with attachments, explanations, approvals, and reversal support.
+- Advanced AJE workflows with attachments, explanations, and approvals.
 - Recurring transactions.
-- Period close/lock dates and accountant review workflow.
+- Accountant review and close-management workflow beyond basic period locking.
 - Fixed assets and depreciation.
 - Budgeting and budget-to-actual reporting.
 - Sales tax tracking and filing support.
@@ -399,10 +426,7 @@ Only after the above is stable, consider:
 
 ### Reporting
 
-- Balance sheet.
 - Cash flow statement.
-- Trial balance.
-- General ledger.
 - Accounts receivable and accounts payable aging.
 - Inventory valuation.
 - Sales, purchasing, deposit, and approval-status reports.
